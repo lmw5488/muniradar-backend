@@ -1,0 +1,5 @@
+# Netlify serves only the page in web/ (the backend runs on the Mac)
+[build]
+  base = "web"
+  publish = "."
+  command = ""
