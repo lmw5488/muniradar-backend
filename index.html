@@ -575,7 +575,7 @@ if (typeof pdfjsLib !== 'undefined') {
 
 // ─── SETTINGS ───
 const BACKEND_URL = 'https://muniradar-backend.onrender.com';
-const DEFAULT_MODEL = 'claude-sonnet-4-5';
+const DEFAULT_MODEL = 'claude-sonnet-4-6';
 
 function getSettings() {
   return { backendUrl: BACKEND_URL, model: DEFAULT_MODEL };
@@ -653,16 +653,6 @@ async function runIntel() {
   ];
 
   async function attemptFetch(isRetry) {
-    if (isRetry) {
-      document.getElementById('results-area').innerHTML = `
-        <div class="loading-state">
-          <div class="loading-spinner"></div>
-          <div style="color:var(--amber);font-size:13px;margin-bottom:8px;">⚡ Server warming up — retrying…</div>
-          <div style="color:var(--text-dim);font-size:12px;">Render free tier spins down after idle periods.<br>This only happens once; subsequent requests are instant.</div>
-        </div>`;
-      // Wait for server to fully wake before retrying
-      await new Promise(r => setTimeout(r, 8000));
-    }
     showLoading(steps, 0);
     setTimeout(() => showLoading(steps, 1), 800);
     setTimeout(() => showLoading(steps, 2), 2200);
@@ -686,9 +676,15 @@ async function runIntel() {
     try {
       intel = await attemptFetch(false);
     } catch (firstErr) {
-      // If it's a network/fetch failure (cold start), auto-retry once
-      if (firstErr instanceof TypeError && firstErr.message.toLowerCase().includes('fetch')) {
-        intel = await attemptFetch(true);
+      // Silent retry on network failure (cold start) — no error shown to user
+      if (firstErr instanceof TypeError) {
+        document.getElementById('results-area').innerHTML = `
+          <div class="loading-state">
+            <div class="loading-spinner"></div>
+            <div style="color:var(--text-muted);font-size:13px;">Connecting to server…</div>
+          </div>`;
+        await new Promise(r => setTimeout(r, 8000));
+        intel = await attemptFetch(false);
       } else {
         throw firstErr;
       }
