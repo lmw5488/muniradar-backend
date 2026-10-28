@@ -600,13 +600,15 @@ if (typeof pdfjsLib !== 'undefined') {
 }
 
 // ─── SETTINGS ───
+const HARDCODED_BACKEND = 'https://muniradar-backend.onrender.com';
+
 function getSettings() {
   try {
     return {
-      backendUrl: (localStorage.getItem('mr_backend_url') || '').replace(/\/$/, ''),
+      backendUrl: (localStorage.getItem('mr_backend_url') || HARDCODED_BACKEND).replace(/\/$/, ''),
       model: localStorage.getItem('mr_model') || 'claude-sonnet-4-5'
     };
-  } catch { return { backendUrl: '', model: 'claude-sonnet-4-5' }; }
+  } catch { return { backendUrl: HARDCODED_BACKEND, model: 'claude-sonnet-4-5' }; }
 }
 function openSettings() {
   const s = getSettings();
@@ -627,6 +629,11 @@ function checkApiKey() {
   document.getElementById('api-warn').hidden = !!getSettings().backendUrl;
 }
 checkApiKey();
+
+// Auto-close overlay on load if backend is set
+window.addEventListener('load', () => {
+  if (getSettings().backendUrl) closeSettings();
+});
 
 // ─── PDF UPLOAD ───
 let pdfText = '';
