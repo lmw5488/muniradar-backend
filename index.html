@@ -503,12 +503,6 @@ body {
 <div class="settings-overlay" id="settings-overlay" hidden>
   <div class="settings-panel">
     <h3>⚙️ Settings</h3>
-    <p>Enter your Railway backend URL once — stored in this browser. The API key lives on the server; no one using this page ever sees it.</p>
-    <div class="settings-field">
-      <label>Backend URL</label>
-      <input type="text" id="api-key-input" placeholder="https://your-app.up.railway.app" autocomplete="off">
-      <div class="settings-note">Your Railway deployment URL — set once, works for everyone who opens this page.</div>
-    </div>
     <div class="settings-field">
       <label>Model</label>
       <select id="model-select">
@@ -552,10 +546,7 @@ body {
 </header>
 
 <main class="main">
-  <div id="api-warn" class="api-warn" hidden>
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-    No backend URL set. Click the ⚙️ gear icon to enter your Railway deployment URL.
-  </div>
+  <div id="api-warn" class="api-warn" hidden></div>
 
   <div class="input-card">
     <h2>CUSIP Credit Intel</h2>
@@ -612,7 +603,6 @@ function getSettings() {
 }
 function openSettings() {
   const s = getSettings();
-  document.getElementById('api-key-input').value = s.backendUrl;
   document.getElementById('model-select').value = s.model;
   document.getElementById('settings-overlay').hidden = false;
 }
@@ -629,11 +619,6 @@ function checkApiKey() {
   document.getElementById('api-warn').hidden = !!getSettings().backendUrl;
 }
 checkApiKey();
-
-// Auto-close overlay on load if backend is set
-window.addEventListener('load', () => {
-  if (getSettings().backendUrl) closeSettings();
-});
 
 // ─── PDF UPLOAD ───
 let pdfText = '';
