@@ -161,20 +161,25 @@ def format_search_results(results: list[dict], label: str) -> str:
 
 
 async def gather_live_data(cusip: str) -> str:
-    """Run all enrichment fetches in parallel and return a combined context block."""
-    async with httpx.AsyncClient(timeout=12.0) as client:
-        issuer_query   = f'"{cusip}" municipal bond issuer credit rating 2024 2025'
-        ratings_query  = f'"{cusip}" OR site:msrb.org "{cusip}" rating action Moody\'s S&P Fitch 2024 2025'
-        news_query     = f'"{cusip}" municipal bond news financial 2024 2025'
+    """Run all enrichment fetches in parallel, hard cap 14s total."""
+    async def _fetch_all():
+        async with httpx.AsyncClient(timeout=httpx.Timeout(8.0, connect=4.0)) as client:
+            issuer_query  = f'"{cusip}" municipal bond issuer credit rating 2024 2025'
+            ratings_query = f'"{cusip}" rating action Moody\'s S&P Fitch muni 2024 2025'
+            news_query    = f'"{cusip}" municipal bond news 2025'
+            return await asyncio.gather(
+                brave_search(client, issuer_query,  count=3),
+                brave_search(client, ratings_query, count=3),
+                brave_search(client, news_query,    count=3),
+                emma_security_info(client, cusip),
+                emma_trade_data(client, cusip),
+                return_exceptions=True,
+            )
 
-        results = await asyncio.gather(
-            brave_search(client, issuer_query,  count=4),
-            brave_search(client, ratings_query, count=4),
-            brave_search(client, news_query,    count=4),
-            emma_security_info(client, cusip),
-            emma_trade_data(client, cusip),
-            return_exceptions=True,
-        )
+    try:
+        results = await asyncio.wait_for(_fetch_all(), timeout=14.0)
+    except asyncio.TimeoutError:
+        return ""
 
     issuer_results, ratings_results, news_results, emma_sec, emma_trades = [
         r if not isinstance(r, Exception) else ([] if i < 3 else "")
