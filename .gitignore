@@ -1,0 +1,6 @@
+__pycache__/
+*.db
+muniradar-secrets.bat
+start-muniradar.command
+ngrok.zip
+ngrok.exe
