@@ -1,8 +1,11 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MuniRadar Credit Intel</title>
-<meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 
 <style>
 /* ─── DARK-FIRST: Tribeca navy design ─── */
@@ -16,16 +19,16 @@
   --gold:       #C9A96E;
   --gold-light: #ddc48f;
   --gold-dim:   rgba(201,169,110,0.12);
-  --text:       #d8e2f0;
-  --text-muted: #7a8fa8;
-  --text-dim:   #4d627a;
+  --text:       #e1e9f5;
+  --text-muted: #94a6bd;
+  --text-dim:   #61768f;
   --green:      #4ade80;
   --green-bg:   rgba(74,222,128,0.10);
   --amber:      #fbbf24;
   --amber-bg:   rgba(251,191,36,0.10);
   --red:        #f87171;
   --red-bg:     rgba(248,113,113,0.10);
-  --radius:     8px;
+  --radius:     12px;
   color-scheme: dark;
 }
 @media (prefers-color-scheme: light) {
@@ -35,17 +38,17 @@
     --surface-2: #f4f6fa;
     --surface-3: #e8ecf3;
     --border:    rgba(18,33,61,0.12);
-    --border-dim: rgba(18,33,61,0.06);
+    --border-dim: rgba(18,33,61,0.07);
     --gold:      #9a7540;
     --gold-light:#b8904f;
     --gold-dim:  rgba(154,117,64,0.10);
     --text:      #12213D;
-    --text-muted:#4a5e7a;
-    --text-dim:  #8a9bb5;
-    --green:     #16a34a;
-    --green-bg:  rgba(22,163,74,0.08);
-    --amber:     #d97706;
-    --amber-bg:  rgba(217,119,6,0.08);
+    --text-muted:#46597a;
+    --text-dim:  #7f90ab;
+    --green:     #15803d;
+    --green-bg:  rgba(21,128,61,0.08);
+    --amber:     #b45309;
+    --amber-bg:  rgba(180,83,9,0.08);
     --red:       #dc2626;
     --red-bg:    rgba(220,38,38,0.08);
     color-scheme: light;
@@ -57,17 +60,17 @@
   --surface-2: #f4f6fa;
   --surface-3: #e8ecf3;
   --border:    rgba(18,33,61,0.12);
-  --border-dim: rgba(18,33,61,0.06);
+  --border-dim: rgba(18,33,61,0.07);
   --gold:      #9a7540;
   --gold-light:#b8904f;
   --gold-dim:  rgba(154,117,64,0.10);
   --text:      #12213D;
-  --text-muted:#4a5e7a;
-  --text-dim:  #8a9bb5;
-  --green:     #16a34a;
-  --green-bg:  rgba(22,163,74,0.08);
-  --amber:     #d97706;
-  --amber-bg:  rgba(217,119,6,0.08);
+  --text-muted:#46597a;
+  --text-dim:  #7f90ab;
+  --green:     #15803d;
+  --green-bg:  rgba(21,128,61,0.08);
+  --amber:     #b45309;
+  --amber-bg:  rgba(180,83,9,0.08);
   --red:       #dc2626;
   --red-bg:    rgba(220,38,38,0.08);
   color-scheme: light;
@@ -79,508 +82,338 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: 'Inter', system-ui, sans-serif;
-  font-size: 14px;
-  line-height: 1.5;
-  min-height: 100%;
-  padding-left: max(16px, env(safe-area-inset-left, 0px));
-  padding-right: max(16px, env(safe-area-inset-right, 0px));
-  padding-block: 0;
+  font-size: 16px;
+  line-height: 1.6;
+  min-height: 100vh;
 }
+strong { font-weight: 650; color: var(--text); }
+em { font-style: italic; }
+.mono { font-family: 'IBM Plex Mono', monospace; }
 
 /* ─── HEADER ─── */
 .header {
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   padding: 0 max(24px, env(safe-area-inset-left, 0px));
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 64px;
-  position: sticky;
-  top: env(safe-area-inset-top, 0px);
-  z-index: 50;
+  display: flex; align-items: center; justify-content: space-between;
+  height: 68px;
+  position: sticky; top: 0; z-index: 50;
 }
 .logo-area { display: flex; align-items: center; gap: 12px; }
-.radar-icon { width: 36px; height: 36px; flex-shrink: 0; }
+.radar-icon { width: 38px; height: 38px; flex-shrink: 0; }
 .logo-text { font-family: 'Playfair Display', Georgia, serif; }
-.logo-text .muni { color: var(--text); font-size: 22px; font-weight: 600; }
-.logo-text .radar { color: var(--gold); font-size: 22px; font-weight: 600; }
-.logo-text .sub { display: block; font-size: 10px; font-weight: 400; color: var(--text-muted); letter-spacing: 0.08em; font-family: 'Inter', sans-serif; margin-top: -2px; }
-.header-actions { display: flex; gap: 8px; align-items: center; }
-.btn-icon {
+.logo-text .muni { color: var(--text); font-size: 24px; font-weight: 600; }
+.logo-text .radar { color: var(--gold); font-size: 24px; font-weight: 600; }
+.logo-text .sub { display: block; font-size: 11px; font-weight: 400; color: var(--text-muted); letter-spacing: 0.08em; font-family: 'Inter', sans-serif; margin-top: -2px; }
+.header-actions { display: flex; gap: 10px; align-items: center; }
+.btn-ghost {
   background: var(--surface-2);
   border: 1px solid var(--border-dim);
-  border-radius: 6px;
+  border-radius: 8px;
   color: var(--text-muted);
   cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  width: 36px; height: 36px;
+  display: flex; align-items: center; gap: 8px;
+  font-size: 14px; font-weight: 600;
+  padding: 9px 14px;
   transition: all 0.15s;
 }
-.btn-icon:hover { border-color: var(--gold); color: var(--gold); }
-.tab-badge {
-  background: var(--gold);
-  color: #12213D;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  padding: 2px 7px;
-  border-radius: 3px;
-  text-transform: uppercase;
-}
+.btn-ghost:hover { border-color: var(--gold); color: var(--gold); }
 
 /* ─── MAIN ─── */
-.main { max-width: 900px; margin: 0 auto; padding-block: 32px; }
+.main { max-width: 1040px; margin: 0 auto; padding: 32px 20px 48px; }
 
 /* ─── INPUT CARD ─── */
 .input-card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 28px;
+  border-radius: var(--radius);
+  padding: 28px 30px;
   margin-bottom: 24px;
 }
-.input-card h2 {
-  font-family: 'Playfair Display', Georgia, serif;
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--text);
-  margin-bottom: 6px;
-}
-.input-card p { color: var(--text-muted); font-size: 13px; margin-bottom: 20px; }
+.input-card h2 { font-family: 'Playfair Display', Georgia, serif; font-size: 24px; font-weight: 600; margin-bottom: 6px; }
+.input-card p { color: var(--text-muted); font-size: 15px; margin-bottom: 20px; }
 .input-row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
 .field { display: flex; flex-direction: column; gap: 6px; }
-.field label { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: var(--text-muted); text-transform: uppercase; }
-.field input[type="text"] {
+.field label { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; color: var(--text-muted); text-transform: uppercase; }
+.field input {
   background: var(--surface-2);
   border: 1px solid var(--border-dim);
-  border-radius: 6px;
+  border-radius: 8px;
   color: var(--text);
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 15px;
-  font-weight: 500;
-  letter-spacing: 0.1em;
-  padding: 10px 14px;
+  font-size: 18px; font-weight: 500; letter-spacing: 0.1em;
+  padding: 11px 16px;
   text-transform: uppercase;
-  width: 220px;
-  transition: border-color 0.15s;
+  width: 260px; max-width: 100%;
 }
-.field input[type="text"]:focus { outline: none; border-color: var(--gold); }
-.field input[type="text"]::placeholder { color: var(--text-dim); font-size: 13px; letter-spacing: 0.03em; text-transform: none; }
-
-.upload-label {
-  background: var(--surface-2);
-  border: 1px dashed var(--border);
-  border-radius: 6px;
-  color: var(--text-muted);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  padding: 10px 14px;
-  transition: all 0.15s;
-  white-space: nowrap;
-}
-.upload-label:hover { border-color: var(--gold); color: var(--gold); }
-.upload-label.has-file { border-color: var(--green); color: var(--green); border-style: solid; }
-#pdf-input { display: none; }
-
+.field input:focus { outline: none; border-color: var(--gold); }
+.field input::placeholder { color: var(--text-dim); font-size: 15px; letter-spacing: 0.03em; text-transform: none; }
 .btn-run {
-  background: var(--gold);
-  border: none;
-  border-radius: 6px;
-  color: #12213D;
-  cursor: pointer;
-  font-family: 'Inter', sans-serif;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  padding: 10px 24px;
-  text-transform: uppercase;
-  transition: all 0.15s;
-  display: flex; align-items: center; gap: 8px;
-  white-space: nowrap;
+  background: var(--gold); border: none; border-radius: 8px; color: #12213D; cursor: pointer;
+  font-size: 15px; font-weight: 700; letter-spacing: 0.05em;
+  padding: 13px 26px; text-transform: uppercase;
+  display: flex; align-items: center; gap: 8px; transition: all 0.15s;
 }
-.btn-run:hover { background: var(--gold-light); transform: translateY(-1px); }
-.btn-run:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+.btn-run:hover { background: var(--gold-light); }
+.btn-run:disabled { opacity: 0.5; cursor: not-allowed; }
 
-/* ─── SETTINGS PANEL ─── */
-.settings-overlay {
-  position: fixed; inset: 0; z-index: 100;
-  background: rgba(0,0,0,0.6);
-  display: flex; align-items: center; justify-content: center;
-  padding: 16px;
+/* ─── STATES ─── */
+.panel-state {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 48px 28px; text-align: center; color: var(--text-muted);
 }
-.settings-panel {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 28px;
-  width: 100%;
-  max-width: 440px;
-}
-.settings-panel h3 {
-  font-size: 16px; font-weight: 600; color: var(--text); margin-bottom: 4px;
-}
-.settings-panel p { font-size: 12px; color: var(--text-muted); margin-bottom: 20px; }
-.settings-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
-.settings-field label { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: var(--text-muted); text-transform: uppercase; }
-.settings-field input {
-  background: var(--surface-2);
-  border: 1px solid var(--border-dim);
-  border-radius: 6px;
-  color: var(--text);
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 13px;
-  padding: 10px 12px;
-  width: 100%;
-  transition: border-color 0.15s;
-}
-.settings-field input:focus { outline: none; border-color: var(--gold); }
-.settings-field select {
-  background: var(--surface-2);
-  border: 1px solid var(--border-dim);
-  border-radius: 6px;
-  color: var(--text);
-  font-size: 13px;
-  padding: 10px 12px;
-  width: 100%;
-}
-.settings-note { font-size: 11px; color: var(--text-dim); margin-top: 4px; }
-.settings-actions { display: flex; gap: 8px; margin-top: 20px; justify-content: flex-end; }
-.btn-secondary {
-  background: transparent;
-  border: 1px solid var(--border-dim);
-  border-radius: 6px;
-  color: var(--text-muted);
-  cursor: pointer;
-  font-size: 13px;
-  padding: 8px 16px;
-}
-.btn-primary {
-  background: var(--gold);
-  border: none;
-  border-radius: 6px;
-  color: #12213D;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 700;
-  padding: 8px 20px;
-}
-
-/* ─── LOADING ─── */
-.loading-state {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 48px 28px;
-  text-align: center;
-}
-.loading-spinner {
-  width: 40px; height: 40px;
-  border: 3px solid var(--border);
-  border-top-color: var(--gold);
-  border-radius: 50%;
-  margin: 0 auto 16px;
-  animation: spin 0.8s linear infinite;
+.spinner {
+  width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--gold);
+  border-radius: 50%; margin: 0 auto 16px; animation: spin 0.8s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
-.loading-steps { display: flex; flex-direction: column; gap: 8px; max-width: 280px; margin: 0 auto; text-align: left; margin-top: 20px; }
-.loading-step { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text-muted); }
-.step-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border); flex-shrink: 0; }
-.step-dot.active { background: var(--gold); }
-.step-dot.done { background: var(--green); }
-
-/* ─── CREDIT CARD ─── */
-.credit-card { display: flex; flex-direction: column; gap: 16px; }
-
-.card-header {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 24px 28px;
-}
-.issuer-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-.issuer-name { font-family: 'Playfair Display', Georgia, serif; font-size: 24px; font-weight: 700; color: var(--text); line-height: 1.2; }
-.issuer-meta { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
-.chip {
-  background: var(--gold-dim);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--gold);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  padding: 3px 8px;
-  text-transform: uppercase;
-}
-.chip.neutral { background: var(--surface-2); color: var(--text-muted); }
-.rating-badges { display: flex; gap: 8px; align-items: flex-start; flex-shrink: 0; }
-.rating-badge {
-  background: var(--surface-2);
-  border: 1px solid var(--border-dim);
-  border-radius: 6px;
-  padding: 6px 10px;
-  text-align: center;
-  min-width: 64px;
-}
-.rating-badge .agency { font-size: 9px; font-weight: 700; letter-spacing: 0.1em; color: var(--text-dim); text-transform: uppercase; }
-.rating-badge .rating-val { font-family: 'IBM Plex Mono', monospace; font-size: 16px; font-weight: 500; color: var(--text); margin: 2px 0; }
-.rating-badge .outlook { font-size: 10px; color: var(--text-muted); }
-.rating-badge.moodys { border-top: 2px solid #e05c5c; }
-.rating-badge.sp     { border-top: 2px solid #3b82f6; }
-.rating-badge.fitch  { border-top: 2px solid #8b5cf6; }
-.issuer-description { color: var(--text-muted); font-size: 13px; line-height: 1.6; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border-dim); }
-
-/* ─── GRID ─── */
-.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-@media (max-width: 620px) { .two-col { grid-template-columns: 1fr; } }
-
-.section-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 20px;
-}
-.section-title {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  color: var(--gold);
-  text-transform: uppercase;
-  margin-bottom: 14px;
-  display: flex; align-items: center; gap: 8px;
-}
-.section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
-
-/* Revenue sources */
-.rev-item { display: flex; align-items: baseline; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border-dim); }
-.rev-item:last-child { border-bottom: none; }
-.rev-share { font-family: 'IBM Plex Mono', monospace; font-size: 14px; font-weight: 500; color: var(--gold); min-width: 44px; }
-.rev-source { font-size: 13px; color: var(--text); flex: 1; }
-.rev-note { font-size: 11px; color: var(--text-muted); }
-
-/* Pledge box */
-.pledge-box {
-  background: var(--gold-dim);
-  border: 1px solid rgba(201,169,110,0.2);
-  border-left: 3px solid var(--gold);
-  border-radius: 6px;
-  padding: 12px 14px;
-  font-size: 13px;
-  color: var(--text);
-  line-height: 1.5;
-}
-
-/* Metrics */
-.metric-row {
-  display: grid;
-  grid-template-columns: 1fr auto auto;
-  gap: 8px 12px;
-  align-items: center;
-  padding: 7px 0;
-  border-bottom: 1px solid var(--border-dim);
-  font-variant-numeric: tabular-nums;
-}
-.metric-row:last-child { border-bottom: none; }
-.metric-name { font-size: 12px; color: var(--text-muted); }
-.metric-value { font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 500; color: var(--text); text-align: right; }
-.vs-badge { font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 3px; white-space: nowrap; }
-.vs-above { background: var(--green-bg); color: var(--green); }
-.vs-below { background: var(--red-bg); color: var(--red); }
-.vs-inline { background: var(--surface-3); color: var(--text-muted); }
-
-/* Strengths / Risks */
-.str-risk-item { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border-dim); font-size: 13px; line-height: 1.5; color: var(--text); }
-.str-risk-item:last-child { border-bottom: none; }
-.str-icon { flex-shrink: 0; margin-top: 1px; }
-
-/* News items */
-.news-item { padding: 10px 0; border-bottom: 1px solid var(--border-dim); }
-.news-item:last-child { border-bottom: none; }
-.news-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-.news-date { font-size: 11px; font-family: 'IBM Plex Mono', monospace; color: var(--text-dim); }
-.impact-pill { font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 10px; }
-.impact-positive { background: var(--green-bg); color: var(--green); }
-.impact-negative { background: var(--red-bg); color: var(--red); }
-.impact-neutral { background: var(--surface-3); color: var(--text-muted); }
-.news-headline { font-size: 13px; color: var(--text); font-weight: 500; }
-.news-detail { font-size: 12px; color: var(--text-muted); margin-top: 3px; line-height: 1.5; }
-
-/* Investability grid */
-.invest-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
-@media (max-width: 500px) { .invest-grid { grid-template-columns: repeat(3, 1fr); } }
-.invest-cell {
-  background: var(--surface-2);
-  border: 1px solid var(--border-dim);
-  border-radius: 8px;
-  padding: 12px 8px;
-  text-align: center;
-}
-.invest-tenor { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; color: var(--text-dim); text-transform: uppercase; margin-bottom: 6px; }
-.invest-verdict { font-size: 11px; font-weight: 700; margin-bottom: 5px; letter-spacing: 0.04em; }
-.verdict-invest { color: var(--green); }
-.verdict-cautious { color: var(--amber); }
-.verdict-avoid { color: var(--red); }
-.invest-rationale { font-size: 10px; color: var(--text-muted); line-height: 1.4; }
-.invest-cell.invest-active { border-color: var(--green); }
-.invest-cell.invest-cautious { border-color: var(--amber); }
-.invest-cell.invest-avoid { border-color: var(--red); }
-
-/* Analyst note */
-.analyst-card {
-  background: linear-gradient(135deg, var(--surface) 0%, var(--surface-2) 100%);
-  border: 1px solid var(--gold);
-  border-radius: 12px;
-  padding: 20px;
-  position: relative;
-  overflow: hidden;
-}
-.analyst-card::before {
-  content: '"';
-  position: absolute;
-  top: -10px; left: 12px;
-  font-family: Georgia, serif;
-  font-size: 80px;
-  color: var(--gold);
-  opacity: 0.15;
-  line-height: 1;
-}
-.analyst-label { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; color: var(--gold); text-transform: uppercase; margin-bottom: 8px; }
-.analyst-text { font-size: 14px; color: var(--text); line-height: 1.7; font-style: italic; }
-.analyst-rec { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-dim); font-size: 12px; color: var(--text-muted); }
-.analyst-rec strong { color: var(--text); font-weight: 600; }
-
-/* Data note */
-.data-note {
-  background: var(--surface-2);
-  border-radius: 6px;
-  padding: 10px 14px;
-  font-size: 11px;
-  color: var(--text-dim);
-  text-align: center;
-}
-
-/* Error */
 .error-state {
-  background: var(--surface);
-  border: 1px solid rgba(248,113,113,0.3);
-  border-radius: 12px;
-  padding: 24px;
-  color: var(--red);
-  font-size: 13px;
-  line-height: 1.6;
+  background: var(--surface); border: 1px solid rgba(248,113,113,0.35); border-radius: var(--radius);
+  padding: 24px; color: var(--red); font-size: 15px;
 }
-.error-state strong { display: block; margin-bottom: 6px; font-size: 14px; }
+.error-state strong { display: block; margin-bottom: 6px; color: var(--red); }
 
-/* Skeleton for empty state */
-.placeholder {
-  background: var(--surface);
-  border: 1px solid var(--border-dim);
-  border-radius: 12px;
-  padding: 48px 28px;
-  text-align: center;
-  color: var(--text-muted);
+/* ─── PROGRESS BAR (while a new report is written) ─── */
+.progress {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 14px 18px; display: flex; align-items: center; gap: 14px; font-size: 14px; color: var(--text-muted);
 }
-.placeholder svg { opacity: 0.3; margin-bottom: 16px; }
-.placeholder p { font-size: 13px; }
+.progress .spinner { width: 20px; height: 20px; border-width: 2px; margin: 0; }
+.progress .steps { display: flex; gap: 14px; margin-left: auto; flex-wrap: wrap; }
+.progress .step { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.progress .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); }
+.progress .dot.done { background: var(--green); }
+.progress .dot.fail { background: var(--red); }
 
-/* Misc */
-.api-warn {
-  background: var(--amber-bg);
-  border: 1px solid rgba(251,191,36,0.3);
-  border-radius: 8px;
-  padding: 12px 16px;
-  font-size: 12px;
-  color: var(--amber);
-  margin-bottom: 16px;
-  display: flex; align-items: center; gap: 8px;
+/* ─── REPORT ─── */
+.report { display: flex; flex-direction: column; gap: 18px; }
+.card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 22px 26px;
 }
-
-/* ─── SAVED CARDS LIBRARY ─── */
-.library-overlay {
-  position: fixed; inset: 0; z-index: 100;
-  background: rgba(0,0,0,0.55);
-  display: flex; justify-content: flex-end;
-}
-.library-overlay[hidden] { display: none; }
-.library-panel {
-  background: var(--surface);
-  border-left: 1px solid var(--border);
-  width: 100%; max-width: 440px; height: 100%;
-  display: flex; flex-direction: column;
-}
-.library-head {
-  padding: 20px 20px 14px;
-  border-bottom: 1px solid var(--border-dim);
-  display: flex; flex-direction: column; gap: 12px;
-}
-.library-head-row { display: flex; align-items: center; justify-content: space-between; }
-.library-head h3 { font-family: 'Playfair Display', Georgia, serif; font-size: 18px; font-weight: 600; color: var(--text); }
-.library-count { font-size: 11px; color: var(--text-muted); margin-left: 8px; font-family: 'Inter', sans-serif; font-weight: 400; }
-.library-search {
-  background: var(--surface-2);
-  border: 1px solid var(--border-dim);
-  border-radius: 6px;
-  color: var(--text);
-  font-size: 13px;
-  padding: 9px 12px;
-  width: 100%;
-}
-.library-search:focus { outline: none; border-color: var(--gold); }
-.library-list { flex: 1; overflow-y: auto; padding: 8px 12px 20px; }
-.library-item {
+.card-title {
+  font-size: 13px; font-weight: 700; letter-spacing: 0.1em; color: var(--gold);
+  text-transform: uppercase; margin-bottom: 16px;
   display: flex; align-items: center; gap: 10px;
-  padding: 10px 8px;
-  border-bottom: 1px solid var(--border-dim);
-  cursor: pointer;
-  border-radius: 6px;
 }
-.library-item:hover { background: var(--surface-2); }
-.library-item-main { flex: 1; min-width: 0; }
-.library-item-name { font-size: 13px; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.library-item-meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; font-family: 'IBM Plex Mono', monospace; }
-.library-rec { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; flex-shrink: 0; }
-.library-del {
-  background: transparent; border: none; color: var(--text-dim);
-  cursor: pointer; font-size: 16px; line-height: 1; padding: 4px 6px; border-radius: 4px; flex-shrink: 0;
-}
-.library-del:hover { color: var(--red); background: var(--red-bg); }
-.library-empty { color: var(--text-muted); font-size: 13px; text-align: center; padding: 40px 12px; }
+.card-title svg { width: 18px; height: 18px; flex-shrink: 0; }
+.card-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+.card-title .right { order: 3; text-transform: none; letter-spacing: 0; font-size: 13px; }
+.sub-title { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; color: var(--text-muted); text-transform: uppercase; margin: 18px 0 8px; }
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+@media (max-width: 760px) { .two-col { grid-template-columns: 1fr; } }
+.prose { font-size: 16px; line-height: 1.7; color: var(--text); }
+.prose + .prose { margin-top: 10px; }
+.muted { color: var(--text-muted); }
+
+/* Saved bar */
 .saved-bar {
-  background: var(--surface);
-  border: 1px solid var(--border-dim);
-  border-radius: 8px;
-  padding: 8px 14px;
-  font-size: 12px;
-  color: var(--text-muted);
+  background: var(--surface); border: 1px solid var(--border-dim); border-radius: 10px;
+  padding: 12px 18px; font-size: 14px; color: var(--text-muted);
   display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
 }
-.saved-bar .cusip-list { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--text-dim); }
-.saved-bar .cached-pill { background: var(--gold-dim); color: var(--gold); font-size: 10px; font-weight: 700; letter-spacing: 0.06em; padding: 2px 7px; border-radius: 3px; text-transform: uppercase; margin-right: 8px; }
-.btn-refresh {
-  background: transparent; border: 1px solid var(--border); border-radius: 6px;
-  color: var(--gold); cursor: pointer; font-size: 11px; font-weight: 600; padding: 5px 12px; white-space: nowrap;
+.saved-bar .cusips { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+.pill { display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; padding: 3px 8px; border-radius: 4px; text-transform: uppercase; }
+.pill-gold { background: var(--gold-dim); color: var(--gold); }
+.btn-outline {
+  background: transparent; border: 1px solid var(--border); border-radius: 8px; color: var(--gold);
+  cursor: pointer; font-size: 13px; font-weight: 600; padding: 8px 14px; white-space: nowrap;
 }
-.btn-refresh:hover { background: var(--gold-dim); }
+.btn-outline:hover { background: var(--gold-dim); }
+
+/* Header card */
+.issuer-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; flex-wrap: wrap; }
+.issuer-name { font-family: 'Playfair Display', Georgia, serif; font-size: 32px; font-weight: 700; line-height: 1.2; }
+.conduit { font-size: 14px; color: var(--text-muted); margin-top: 4px; }
+.chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.chip {
+  background: var(--gold-dim); border: 1px solid var(--border); border-radius: 5px; color: var(--gold);
+  font-size: 12px; font-weight: 600; letter-spacing: 0.05em; padding: 4px 10px; text-transform: uppercase;
+}
+.chip.neutral { background: var(--surface-2); color: var(--text-muted); font-family: 'IBM Plex Mono', monospace; }
+.rating-badges { display: flex; gap: 10px; flex-shrink: 0; }
+.rating-badge {
+  background: var(--surface-2); border: 1px solid var(--border-dim); border-radius: 8px;
+  padding: 8px 12px; text-align: center; min-width: 78px;
+}
+.rating-badge .agency { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; color: var(--text-dim); text-transform: uppercase; }
+.rating-badge .val { font-family: 'IBM Plex Mono', monospace; font-size: 22px; font-weight: 500; margin: 2px 0; }
+.rating-badge .outlook { font-size: 12px; color: var(--text-muted); }
+.rating-badge.moodys { border-top: 3px solid #e05c5c; }
+.rating-badge.sp     { border-top: 3px solid #3b82f6; }
+.rating-badge.fitch  { border-top: 3px solid #8b5cf6; }
+.issuer-desc { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--border-dim); }
+
+/* AI Analyst View */
+.view-card { border: 1px solid var(--gold); background: linear-gradient(135deg, var(--surface) 0%, var(--surface-2) 100%); }
+.view-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 18px; }
+@media (max-width: 760px) { .view-grid { grid-template-columns: 1fr; } }
+.view-stat { background: var(--surface); border: 1px solid var(--border-dim); border-radius: 10px; padding: 14px 16px; }
+.view-stat .label { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; color: var(--text-dim); text-transform: uppercase; }
+.view-stat .value { font-size: 22px; font-weight: 700; margin-top: 4px; }
+.view-stat .note { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+.summary-text { font-size: 17px; line-height: 1.75; }
+.disclosure {
+  margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border-dim);
+  font-size: 12px; color: var(--text-dim); line-height: 1.5;
+}
+
+/* Lists */
+.bullets { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.bullets li { display: flex; gap: 10px; font-size: 15px; line-height: 1.6; }
+.bullets li::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--gold); margin-top: 10px; flex-shrink: 0; }
+.entity-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.entity-list span { background: var(--surface-2); border: 1px solid var(--border-dim); border-radius: 5px; padding: 3px 9px; font-size: 13px; color: var(--text); }
+.kv { display: grid; grid-template-columns: 140px 1fr; gap: 8px 16px; font-size: 15px; }
+.kv .k { color: var(--text-muted); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; padding-top: 2px; }
+@media (max-width: 560px) { .kv { grid-template-columns: 1fr; gap: 2px; } .kv .v { margin-bottom: 8px; } }
+
+/* Revenue + pledge */
+.rev-item { display: flex; align-items: baseline; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--border-dim); }
+.rev-item:last-child { border-bottom: none; }
+.rev-share { font-family: 'IBM Plex Mono', monospace; font-size: 16px; font-weight: 500; color: var(--gold); min-width: 54px; }
+.rev-source { font-size: 15px; font-weight: 600; }
+.rev-note { font-size: 13px; color: var(--text-muted); }
+.pledge-box {
+  background: var(--gold-dim); border-left: 3px solid var(--gold); border-radius: 6px;
+  padding: 14px 16px; font-size: 15px; line-height: 1.65;
+}
+
+/* Metrics table */
+.metrics-table { width: 100%; border-collapse: collapse; font-size: 15px; table-layout: fixed; }
+.metrics-table col.c-name { width: 22%; } .metrics-table col.c-val { width: 17%; } .metrics-table col.c-med { width: 19%; }
+.metrics-table col.c-vs { width: 11%; } .metrics-table col.c-note { width: 31%; }
+.metrics-table th {
+  text-align: left; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: var(--text-dim);
+  text-transform: uppercase; padding: 0 10px 10px 0; border-bottom: 1px solid var(--border);
+}
+.metrics-table td { padding: 11px 10px 11px 0; border-bottom: 1px solid var(--border-dim); vertical-align: top; }
+.metrics-table tr:last-child td { border-bottom: none; }
+.metrics-table .m-name { font-weight: 600; }
+.metrics-table .m-val { font-family: 'IBM Plex Mono', monospace; font-size: 14px; font-weight: 500; }
+.metrics-table .m-med { font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: var(--text-muted); }
+.metrics-table .m-note { font-size: 13px; color: var(--text-muted); }
+.vs { font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 4px; white-space: nowrap; }
+.vs.good { background: var(--green-bg); color: var(--green); }
+.vs.bad  { background: var(--red-bg); color: var(--red); }
+.vs.flat { background: var(--surface-3); color: var(--text-muted); }
+.table-wrap { overflow-x: auto; }
+@media (max-width: 640px) { .metrics-table { table-layout: auto; } .metrics-table .m-note, .metrics-table col.c-note { display: none; } }
+
+/* Ratings */
+.rating-actions { display: flex; flex-direction: column; gap: 10px; }
+.ra-row { display: grid; grid-template-columns: 70px 1fr; gap: 12px; font-size: 15px; padding-bottom: 10px; border-bottom: 1px solid var(--border-dim); }
+.ra-row:last-child { border-bottom: none; }
+.ra-agency { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; padding-top: 3px; }
+.timeline { display: flex; flex-direction: column; }
+.tl-item { display: grid; grid-template-columns: 90px 1fr; gap: 14px; padding: 10px 0; border-bottom: 1px solid var(--border-dim); }
+.tl-item:last-child { border-bottom: none; }
+.tl-date { font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: var(--text-dim); padding-top: 2px; }
+.tl-head { font-size: 15px; font-weight: 600; }
+.tl-detail { font-size: 14px; color: var(--text-muted); }
+
+/* Strengths / risks */
+.sr-item { display: flex; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border-dim); }
+.sr-item:last-child { border-bottom: none; }
+.sr-icon { flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-top: 1px; }
+.sr-icon svg { width: 13px; height: 13px; }
+.sr-icon.good { background: var(--green-bg); color: var(--green); }
+.sr-icon.bad  { background: var(--red-bg); color: var(--red); }
+.sr-title { font-size: 15px; font-weight: 700; }
+.sr-detail { font-size: 14px; color: var(--text-muted); line-height: 1.6; margin-top: 2px; }
+
+/* Outlook / impact / verdict pills */
+.outlook { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; padding: 4px 10px; border-radius: 4px; text-transform: uppercase; }
+.o-pos { background: var(--green-bg); color: var(--green); }
+.o-neg { background: var(--red-bg); color: var(--red); }
+.o-stab { background: var(--amber-bg); color: var(--amber); }
+.impact { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; text-transform: uppercase; letter-spacing: 0.04em; }
+
+/* Investability grid */
+.invest-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+@media (max-width: 640px) { .invest-grid { grid-template-columns: repeat(2, 1fr); } }
+.invest-cell { background: var(--surface-2); border: 1px solid var(--border-dim); border-radius: 10px; padding: 14px 10px; text-align: center; }
+.invest-cell.i-good { border-color: var(--green); }
+.invest-cell.i-mid  { border-color: var(--amber); }
+.invest-cell.i-bad  { border-color: var(--red); }
+.invest-tenor { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: var(--text-dim); text-transform: uppercase; }
+.invest-verdict { font-size: 13px; font-weight: 800; margin: 6px 0; letter-spacing: 0.04em; }
+.invest-rationale { font-size: 13px; color: var(--text-muted); line-height: 1.45; }
+.c-good { color: var(--green); } .c-mid { color: var(--amber); } .c-bad { color: var(--red); }
+
+/* Skeleton for sections still being written */
+.skeleton { display: flex; flex-direction: column; gap: 10px; }
+.skeleton div { height: 14px; border-radius: 4px; background: linear-gradient(90deg, var(--surface-2), var(--surface-3), var(--surface-2)); background-size: 200% 100%; animation: shimmer 1.4s infinite; }
+.skeleton div:nth-child(2) { width: 85%; } .skeleton div:nth-child(3) { width: 70%; }
+@keyframes shimmer { to { background-position: -200% 0; } }
+.part-error { color: var(--red); font-size: 14px; }
+
+.data-note { font-size: 13px; color: var(--text-dim); text-align: center; padding: 6px 12px; }
+.site-footer { max-width: 1040px; margin: 0 auto; padding: 0 20px 32px; font-size: 12px; color: var(--text-dim); text-align: center; line-height: 1.5; }
+
+/* ─── MODAL (saved report available) ─── */
+.overlay { position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,0.55); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.overlay[hidden] { display: none; }
+.modal { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 28px; width: 100%; max-width: 480px; }
+.modal h3 { font-family: 'Playfair Display', Georgia, serif; font-size: 22px; margin-bottom: 10px; }
+.modal p { font-size: 16px; color: var(--text-muted); margin-bottom: 22px; }
+.modal-actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+.btn-primary { background: var(--gold); border: none; border-radius: 8px; color: #12213D; cursor: pointer; font-size: 15px; font-weight: 700; padding: 11px 20px; }
+.btn-primary:hover { background: var(--gold-light); }
+.btn-secondary { background: transparent; border: 1px solid var(--border); border-radius: 8px; color: var(--text); cursor: pointer; font-size: 15px; font-weight: 600; padding: 11px 20px; }
+.btn-secondary:hover { border-color: var(--gold); color: var(--gold); }
+
+/* ─── LIBRARY DRAWER ─── */
+.drawer-overlay { position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,0.55); display: flex; justify-content: flex-end; }
+.drawer-overlay[hidden] { display: none; }
+.drawer { background: var(--surface); border-left: 1px solid var(--border); width: 100%; max-width: 480px; height: 100%; display: flex; flex-direction: column; }
+.drawer-head { padding: 22px 22px 14px; border-bottom: 1px solid var(--border-dim); display: flex; flex-direction: column; gap: 12px; }
+.drawer-head-row { display: flex; align-items: center; justify-content: space-between; }
+.drawer-head h3 { font-family: 'Playfair Display', Georgia, serif; font-size: 22px; }
+.drawer-count { font-size: 13px; color: var(--text-muted); margin-left: 8px; font-family: 'Inter', sans-serif; font-weight: 400; }
+.drawer-search { background: var(--surface-2); border: 1px solid var(--border-dim); border-radius: 8px; color: var(--text); font-size: 15px; padding: 10px 12px; width: 100%; }
+.drawer-search:focus { outline: none; border-color: var(--gold); }
+.drawer-list { flex: 1; overflow-y: auto; padding: 8px 12px 20px; }
+.lib-item { display: flex; align-items: center; gap: 10px; padding: 12px 10px; border-bottom: 1px solid var(--border-dim); cursor: pointer; border-radius: 8px; }
+.lib-item:hover { background: var(--surface-2); }
+.lib-main { flex: 1; min-width: 0; }
+.lib-name { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lib-meta { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.lib-rec { font-size: 11px; font-weight: 800; letter-spacing: 0.06em; flex-shrink: 0; }
+.lib-del { background: transparent; border: none; color: var(--text-dim); cursor: pointer; font-size: 18px; line-height: 1; padding: 4px 8px; border-radius: 4px; }
+.lib-del:hover { color: var(--red); background: var(--red-bg); }
+.lib-empty { color: var(--text-muted); font-size: 15px; text-align: center; padding: 40px 12px; }
+.icon-btn { background: var(--surface-2); border: 1px solid var(--border-dim); border-radius: 8px; color: var(--text-muted); cursor: pointer; width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; }
+.icon-btn:hover { color: var(--gold); border-color: var(--gold); }
 </style>
+</head>
+<body>
 
-<!-- no settings overlay -->
+<!-- ─── SAVED REPORT PROMPT ─── -->
+<div class="overlay" id="saved-overlay" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="saved-title">
+    <h3 id="saved-title">Saved report available</h3>
+    <p id="saved-text"></p>
+    <div class="modal-actions">
+      <button class="btn-secondary" id="btn-pull-new">Pull new</button>
+      <button class="btn-primary" id="btn-view-saved">View saved</button>
+    </div>
+  </div>
+</div>
 
-<!-- ─── SAVED CARDS LIBRARY ─── -->
-<div class="library-overlay" id="library-overlay" hidden>
-  <div class="library-panel">
-    <div class="library-head">
-      <div class="library-head-row">
-        <h3>Saved Cards<span class="library-count" id="library-count"></span></h3>
-        <button class="btn-icon" onclick="closeLibrary()" title="Close">
+<!-- ─── LIBRARY ─── -->
+<div class="drawer-overlay" id="library-overlay" hidden>
+  <div class="drawer">
+    <div class="drawer-head">
+      <div class="drawer-head-row">
+        <h3>Issuer Library<span class="drawer-count" id="library-count"></span></h3>
+        <button class="icon-btn" onclick="closeLibrary()" title="Close" aria-label="Close">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
-      <input type="text" class="library-search" id="library-search" placeholder="Filter by CUSIP, issuer, state, sector…">
+      <input type="text" class="drawer-search" id="library-search" placeholder="Filter by issuer, CUSIP, state, sector…">
     </div>
-    <div class="library-list" id="library-list"></div>
+    <div class="drawer-list" id="library-list"></div>
   </div>
 </div>
 
@@ -602,508 +435,513 @@ body {
     </div>
   </div>
   <div class="header-actions">
-    <span class="tab-badge">Credit Intel</span>
-    <button class="btn-icon" onclick="openLibrary()" title="Saved cards">
+    <button class="btn-ghost" onclick="openLibrary()" title="Saved issuer reports">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-    </button>
-    <button class="btn-icon" onclick="openSettings()" title="Settings">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-      </svg>
+      Library
     </button>
   </div>
 </header>
 
 <main class="main">
-  <div id="api-warn" class="api-warn" hidden></div>
-
   <div class="input-card">
-    <h2>CUSIP Credit Intel</h2>
-    <p>Drop in a CUSIP and optionally attach a Moody's research report PDF. Hit Run to generate a full credit intelligence card synthesized from public filings and market data.</p>
+    <h2>Issuer Credit Report</h2>
+    <p>Enter any CUSIP. MuniRadar identifies the issuer in Bloomberg and builds a full issuer-level credit report, or opens the saved one if the issuer has been run before.</p>
     <div class="input-row">
       <div class="field">
-        <label>CUSIP</label>
-        <input type="text" id="cusip-input" placeholder="e.g. 64966EBQ3" maxlength="9">
+        <label for="cusip-input">CUSIP</label>
+        <input type="text" id="cusip-input" placeholder="e.g. 64966EBQ3" maxlength="9" autocomplete="off">
       </div>
-      <div class="field">
-        <label>Moody's Report (optional)</label>
-        <label class="upload-label" id="upload-label" for="pdf-input">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
-          <span id="upload-label-text">Attach PDF…</span>
-        </label>
-        <input type="file" id="pdf-input" accept=".pdf">
-      </div>
-      <button class="btn-run" id="run-btn" onclick="runIntel()">
+      <button class="btn-run" id="run-btn" onclick="runSearch()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-        Run Analysis
+        Run
       </button>
     </div>
   </div>
 
   <div id="results-area">
-    <div class="placeholder">
-      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#C9A96E" stroke-width="1.2">
-        <circle cx="12" cy="12" r="10"/>
-        <circle cx="12" cy="12" r="6"/>
-        <circle cx="12" cy="12" r="2"/>
-        <line x1="12" y1="2" x2="12" y2="0" opacity="0"/>
-      </svg>
-      <p>Enter a CUSIP above to generate a credit intelligence card</p>
+    <div class="panel-state">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#C9A96E" stroke-width="1.2" style="opacity:.35;margin-bottom:14px"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+      <p>Enter a CUSIP above to pull an issuer credit report</p>
     </div>
   </div>
 </main>
 
-<script>
-// pdf.js worker
-if (typeof pdfjsLib !== 'undefined') {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-}
+<footer class="site-footer">
+  For internal use only. Reports are generated by AI from Bloomberg and public sources and may contain errors or omissions.
+  They are not a credit rating, a recommendation or investment advice. Verify all information independently before acting.
+</footer>
 
+<script>
 // ─── SETTINGS ───
 const BACKEND_URL = 'https://muniradar.ngrok.app';
 const DEFAULT_MODEL = 'claude-sonnet-4-6';
+const DISCLOSURE = 'Tribeca AI Analyst View is generated by AI from Bloomberg and public sources for internal discussion only. ' +
+  'It is not a credit rating, a recommendation or investment advice, and has not been reviewed by a credit analyst. ' +
+  'Verify all information independently before making any investment decision.';
 
-function getSettings() {
-  return { backendUrl: BACKEND_URL, model: DEFAULT_MODEL };
-}
-function openSettings() {}
-function closeSettings() {}
-function saveSettings() {}
-function checkApiKey() {
-  document.getElementById('api-warn').hidden = true;
-}
-checkApiKey();
+// ─── ICONS (line icons) ───
+const ICONS = {
+  view:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
+  overview: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/></svg>',
+  map:      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg>',
+  ops:      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>',
+  revenue:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-9-9v9Z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15Z"/></svg>',
+  shield:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></svg>',
+  metrics:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg>',
+  ratings:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 2 3 6.5 7 .8-5.2 4.8 1.4 7L12 17.6 5.8 21l1.4-7L2 9.3l7-.8Z"/></svg>',
+  balance:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18"/><path d="M5 7h14"/><path d="m5 7-3 7a4 4 0 0 0 6 0Z"/><path d="m19 7-3 7a4 4 0 0 0 6 0Z"/></svg>',
+  sector:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
+  news:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h13v16H6a2 2 0 0 1-2-2Z"/><path d="M17 8h3v10a2 2 0 0 1-2 2"/><path d="M8 8h5M8 12h5M8 16h3"/></svg>',
+  clock:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+  check:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 12l5 5 9-10"/></svg>',
+  alert:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 6v8"/><path d="M12 18h.01"/></svg>',
+};
 
-// ─── PDF UPLOAD ───
-let pdfText = '';
-document.getElementById('pdf-input').addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  const label = document.getElementById('upload-label');
-  const labelText = document.getElementById('upload-label-text');
-  labelText.textContent = 'Reading PDF…';
-  try {
-    const buf = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
-    let text = '';
-    const maxPages = Math.min(pdf.numPages, 20);
-    for (let i = 1; i <= maxPages; i++) {
-      const page = await pdf.getPage(i);
-      const content = await page.getTextContent();
-      text += content.items.map(item => item.str).join(' ') + '\n';
-    }
-    pdfText = text.trim().slice(0, 12000);
-    label.classList.add('has-file');
-    labelText.textContent = `✓ ${file.name.slice(0,28)}…`;
-  } catch (err) {
-    labelText.textContent = 'Error reading PDF';
-    pdfText = '';
-  }
-});
-
-// ─── LOADING STATE ───
-function showLoading(steps, activeIdx) {
-  document.getElementById('results-area').innerHTML = `
-    <div class="loading-state">
-      <div class="loading-spinner"></div>
-      <div style="color:var(--text-muted);font-size:13px;">${steps[activeIdx]}</div>
-      <div class="loading-steps">
-        ${steps.map((s,i) => `
-          <div class="loading-step">
-            <div class="step-dot ${i < activeIdx ? 'done' : i === activeIdx ? 'active' : ''}"></div>
-            <span style="color:${i <= activeIdx ? 'var(--text-muted)' : 'var(--text-dim)'}">${s}</span>
-          </div>`).join('')}
-      </div>
-    </div>`;
-}
-
-// ─── MAIN RUN ───
-let loadingTimers = [];
-function clearLoadingTimers() { loadingTimers.forEach(clearTimeout); loadingTimers = []; }
-
-async function runIntel(refresh) {
-  refresh = refresh === true;
-  const cusip = document.getElementById('cusip-input').value.trim().toUpperCase();
-  if (!cusip || cusip.length < 6) {
-    alert('Please enter a valid CUSIP (9 characters)');
-    return;
-  }
-  const { backendUrl, model } = getSettings();
-  if (!backendUrl) { openSettings(); return; }
-
-  const btn = document.getElementById('run-btn');
-  btn.disabled = true;
-
-  const steps = [
-    'Identifying issuer from CUSIP…',
-    'Pulling credit fundamentals…',
-    'Synthesizing ratings & metrics…',
-    'Generating investability assessment…',
-    'Building credit intel card…'
-  ];
-
-  async function attemptFetch(isRetry) {
-    clearLoadingTimers();
-    showLoading(steps, 0);
-    loadingTimers.push(setTimeout(() => showLoading(steps, 1), 800));
-    loadingTimers.push(setTimeout(() => showLoading(steps, 2), 2200));
-    loadingTimers.push(setTimeout(() => showLoading(steps, 3), 4500));
-    loadingTimers.push(setTimeout(() => showLoading(steps, 4), 7000));
-
-    const response = await fetch(`${backendUrl}/api/credit-intel`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ cusip, pdf_text: pdfText || null, model, refresh })
-    });
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      throw new Error(err.detail || `Server error ${response.status}`);
-    }
-    return response.json();
-  }
-
-  try {
-    let intel;
-    try {
-      intel = await attemptFetch(false);
-    } catch (firstErr) {
-      // Silent retry on network failure (cold start) — no error shown to user
-      if (firstErr instanceof TypeError) {
-        clearLoadingTimers();
-        document.getElementById('results-area').innerHTML = `
-          <div class="loading-state">
-            <div class="loading-spinner"></div>
-            <div style="color:var(--text-muted);font-size:13px;">Connecting to server…</div>
-          </div>`;
-        await new Promise(r => setTimeout(r, 8000));
-        intel = await attemptFetch(false);
-      } else {
-        throw firstErr;
-      }
-    }
-    clearLoadingTimers();
-    renderCard(intel, cusip);
-  } catch (err) {
-    clearLoadingTimers();
-    document.getElementById('results-area').innerHTML = `
-      <div class="error-state">
-        <strong>Analysis failed</strong>
-        ${err.message || 'Unknown error. Check your backend URL in Settings.'}
-        <br><br>
-        <span style="font-size:11px;color:var(--text-dim)">Ensure your Render backend URL is correct in Settings and the server is running.</span>
-      </div>`;
-  } finally {
-    btn.disabled = false;
-  }
-}
-
-// ─── RENDER ───
-function renderCard(d, cusip) {
-  const i = d.issuer || {};
-  const r = d.ratings || {};
-  const inv = d.investability || {};
-
-  const ratingBadge = (agency, cls, obj) => obj && obj.rating !== 'NR' ? `
-    <div class="rating-badge ${cls}">
-      <div class="agency">${agency}</div>
-      <div class="rating-val">${obj.rating || 'NR'}</div>
-      <div class="outlook">${obj.outlook || ''}</div>
-    </div>` : '';
-
-  const verdictClass = v => v === 'INVESTABLE' ? 'invest-active' : v === 'CAUTIOUS' ? 'invest-cautious' : 'invest-avoid';
-  const verdictColor = v => v === 'INVESTABLE' ? 'verdict-invest' : v === 'CAUTIOUS' ? 'verdict-cautious' : 'verdict-avoid';
-
-  const recColor = {
-    'BUY': 'var(--green)', 'HOLD': 'var(--amber)',
-    'REDUCE': 'var(--red)', 'AVOID': 'var(--red)'
-  }[d.overall_recommendation] || 'var(--text)';
-
-  const impactClass = imp => imp === 'positive' ? 'impact-positive' : imp === 'negative' ? 'impact-negative' : 'impact-neutral';
-
-  const vsClass = v => v === 'above' ? 'vs-above' : v === 'below' ? 'vs-below' : 'vs-inline';
-  const vsLabel = v => v === 'above' ? '↑ Above' : v === 'below' ? '↓ Below' : '→ In-line';
-
-  document.getElementById('results-area').innerHTML = `
-  <div class="credit-card">
-    ${savedBar(d.library_meta)}
-
-    <!-- HEADER -->
-    <div class="card-header">
-      <div class="issuer-row">
-        <div>
-          <div class="issuer-name">${i.name || 'Unknown Issuer'}</div>
-          <div class="issuer-meta">
-            <span class="chip">${i.state || '—'}</span>
-            <span class="chip">${i.sector || '—'}</span>
-            <span class="chip">${i.bond_type || '—'}</span>
-            <span class="chip neutral" style="font-family:'IBM Plex Mono',monospace;font-size:10px;">${cusip}</span>
-          </div>
-        </div>
-        <div class="rating-badges">
-          ${ratingBadge("Moody's", 'moodys', r.moodys)}
-          ${ratingBadge('S&P', 'sp', r.sp)}
-          ${ratingBadge('Fitch', 'fitch', r.fitch)}
-        </div>
-      </div>
-      ${i.service_area ? `<div class="issuer-description"><strong style="color:var(--gold)">Service Area:</strong> ${i.service_area}</div>` : ''}
-      ${i.description ? `<div class="issuer-description">${i.description}</div>` : ''}
-    </div>
-
-    <!-- REVENUE + PLEDGE -->
-    <div class="two-col">
-      <div class="section-card">
-        <div class="section-title">Revenue Sources</div>
-        ${(d.revenue_sources || []).map(s => `
-          <div class="rev-item">
-            <span class="rev-share">${s.share || '—'}</span>
-            <div>
-              <div class="rev-source">${s.source}</div>
-              ${s.notes ? `<div class="rev-note">${s.notes}</div>` : ''}
-            </div>
-          </div>`).join('')}
-      </div>
-      <div class="section-card">
-        <div class="section-title">Security Pledge</div>
-        <div class="pledge-box">${d.security_pledge || 'Not specified'}</div>
-        ${r.moodys?.last_action ? `
-        <div style="margin-top:14px">
-          <div class="section-title" style="font-size:10px;margin-bottom:10px;">Recent Rating Actions</div>
-          ${r.moodys?.last_action && r.moodys.rating !== 'NR' ? `<div style="font-size:12px;color:var(--text-muted);padding:5px 0;border-bottom:1px solid var(--border-dim)"><span style="color:#e05c5c;font-weight:600;font-size:10px;margin-right:6px;">MDY</span>${r.moodys.last_action}</div>` : ''}
-          ${r.sp?.last_action && r.sp.rating !== 'NR' ? `<div style="font-size:12px;color:var(--text-muted);padding:5px 0;border-bottom:1px solid var(--border-dim)"><span style="color:#3b82f6;font-weight:600;font-size:10px;margin-right:6px;">S&P</span>${r.sp.last_action}</div>` : ''}
-          ${r.fitch?.last_action && r.fitch.rating !== 'NR' ? `<div style="font-size:12px;color:var(--text-muted);padding:5px 0"><span style="color:#8b5cf6;font-weight:600;font-size:10px;margin-right:6px;">FTCH</span>${r.fitch.last_action}</div>` : ''}
-        </div>` : ''}
-      </div>
-    </div>
-
-    <!-- METRICS -->
-    <div class="section-card">
-      <div class="section-title">Key Metrics vs Sector Median</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 24px;">
-        <div>
-          ${(d.key_metrics || []).filter((_,idx) => idx % 2 === 0).map(m => `
-            <div class="metric-row">
-              <span class="metric-name">${m.metric}</span>
-              <span class="metric-value">${m.value}</span>
-              <span class="vs-badge ${vsClass(m.vs_median)}">${vsLabel(m.vs_median)}</span>
-            </div>`).join('')}
-        </div>
-        <div>
-          ${(d.key_metrics || []).filter((_,idx) => idx % 2 === 1).map(m => `
-            <div class="metric-row">
-              <span class="metric-name">${m.metric}</span>
-              <span class="metric-value">${m.value}</span>
-              <span class="vs-badge ${vsClass(m.vs_median)}">${vsLabel(m.vs_median)}</span>
-            </div>`).join('')}
-        </div>
-      </div>
-    </div>
-
-    <!-- STRENGTHS + RISKS -->
-    <div class="two-col">
-      <div class="section-card">
-        <div class="section-title" style="color:var(--green)">Strengths</div>
-        ${(d.strengths || []).map(s => `
-          <div class="str-risk-item">
-            <span class="str-icon" style="color:var(--green)">✓</span>
-            <span>${s}</span>
-          </div>`).join('')}
-      </div>
-      <div class="section-card">
-        <div class="section-title" style="color:var(--red)">Risks</div>
-        ${(d.risks || []).map(r => `
-          <div class="str-risk-item">
-            <span class="str-icon" style="color:var(--red)">⚠</span>
-            <span>${r}</span>
-          </div>`).join('')}
-      </div>
-    </div>
-
-    <!-- NEWS -->
-    <div class="section-card">
-      <div class="section-title">Recent Developments</div>
-      ${(d.recent_developments || []).length ? (d.recent_developments || []).map(n => `
-        <div class="news-item">
-          <div class="news-meta">
-            <span class="news-date">${n.date}</span>
-            <span class="impact-pill ${impactClass(n.impact)}">${n.impact}</span>
-          </div>
-          <div class="news-headline">${n.headline}</div>
-          ${n.detail ? `<div class="news-detail">${n.detail}</div>` : ''}
-        </div>`).join('') : '<div style="color:var(--text-dim);font-size:13px;">No recent developments on record</div>'}
-    </div>
-
-    <!-- INVESTABILITY GRID -->
-    <div class="section-card">
-      <div class="section-title" style="justify-content:space-between;align-items:center;">
-        <span>Investability by Maturity Tier</span>
-        <span style="font-size:12px;font-weight:600;letter-spacing:0.04em;color:${recColor};text-transform:none;">
-          Overall: ${d.overall_recommendation || '—'}
-        </span>
-      </div>
-      <div class="invest-grid">
-        ${['1yr','5yr','10yr','15yr','20yr'].map(t => {
-          const cell = inv[t] || {};
-          const vc = verdictClass(cell.verdict);
-          const vcolor = verdictColor(cell.verdict);
-          return `
-          <div class="invest-cell ${vc}">
-            <div class="invest-tenor">${t}</div>
-            <div class="invest-verdict ${vcolor}">${cell.verdict || '—'}</div>
-            <div class="invest-rationale">${cell.rationale || ''}</div>
-          </div>`;
-        }).join('')}
-      </div>
-    </div>
-
-    <!-- ANALYST NOTE -->
-    <div class="analyst-card">
-      <div class="analyst-label">Senior Analyst Perspective</div>
-      <div class="analyst-text">${d.analyst_note || ''}</div>
-      <div class="analyst-rec">Overall recommendation: <strong style="color:${recColor}">${d.overall_recommendation || '—'}</strong></div>
-    </div>
-
-    <!-- DATA NOTE -->
-    ${d.data_note ? `<div class="data-note">⚠ ${d.data_note}</div>` : ''}
-
-  </div>`;
-}
-
-// ─── SAVED CARDS LIBRARY ───
-let libraryCards = [];
-
-function escHtml(s) {
+// ─── HELPERS ───
+function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
-
-function fmtSavedAt(iso) {
+// Escape, then allow **bold** and *italic* from the analyst text
+function md(s) {
+  return esc(s)
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/(^|[^*])\*([^*\n]+?)\*(?!\*)/g, '$1<em>$2</em>');
+}
+function fmtDate(iso) {
   if (!iso) return '';
-  const dt = new Date(iso);
-  if (isNaN(dt)) return iso;
-  return dt.toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+  const d = new Date(iso);
+  if (isNaN(d)) return iso;
+  return d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
 }
-
-function cusipSummary(cusips) {
-  cusips = cusips || [];
-  if (cusips.length <= 1) return cusips[0] || '—';
-  return `${cusips[0]} +${cusips.length - 1} more`;
+function fmtDateTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d)) return iso;
+  return d.toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
-
-function savedBar(s) {
-  if (!s) return '';
-  const cusips = s.cusips || [];
-  return `
-    <div class="saved-bar">
-      <div>
-        ${s.cached ? '<span class="cached-pill">From library</span>' : '<span class="cached-pill">Saved</span>'}
-        Issuer card · updated ${escHtml(fmtSavedAt(s.saved_at))}
-        ${cusips.length ? `<div class="cusip-list">CUSIPs on file: ${cusips.map(escHtml).join(', ')}</div>` : ''}
-      </div>
-      <button class="btn-refresh" onclick="refreshCard()" title="Re-run the full analysis and overwrite this issuer card">↻ Refresh analysis</button>
-    </div>`;
+function title(icon, text, right = '') {
+  return `<div class="card-title">${ICONS[icon] || ''}<span>${esc(text)}</span>${right ? `<span class="right">${right}</span>` : ''}</div>`;
 }
-
-function refreshCard() {
-  if (!confirm('Re-run the full analysis for this issuer? This overwrites the saved card.')) return;
-  runIntel(true);
+const PARTS = [['overview','Overview'],['operations','Operations'],['metrics','Metrics'],['ratings','Ratings'],['credit','Strengths & risks'],['view','Analyst view']];
+const SKELETON = '<div class="skeleton"><div></div><div></div><div></div></div>';
+function outlookClass(o) {
+  o = (o || '').toLowerCase();
+  return o.startsWith('pos') ? 'o-pos' : o.startsWith('neg') ? 'o-neg' : 'o-stab';
 }
+function verdictClass(v) { return v === 'INVESTABLE' ? 'good' : v === 'CAUTIOUS' ? 'mid' : 'bad'; }
+function recColor(r) { return ({ BUY: 'var(--green)', HOLD: 'var(--amber)', REDUCE: 'var(--red)', AVOID: 'var(--red)' }[r] || 'var(--text-muted)'); }
+function list(arr) { return (arr || []).length ? `<ul class="bullets">${arr.map(x => `<li><span>${md(x)}</span></li>`).join('')}</ul>` : '<span class="muted">—</span>'; }
 
-async function libraryFetch(path, opts = {}) {
-  const { backendUrl } = getSettings();
-  const res = await fetch(`${backendUrl}${path}`, {
+async function api(path, opts = {}) {
+  const res = await fetch(`${BACKEND_URL}${path}`, {
     ...opts,
-    headers: { 'ngrok-skip-browser-warning': '1', ...(opts.headers || {}) }
+    headers: { 'content-type': 'application/json', 'ngrok-skip-browser-warning': '1', ...(opts.headers || {}) },
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || `Server error ${res.status}`);
   }
-  return res.json();
+  return res;
 }
+
+function showState(html) { document.getElementById('results-area').innerHTML = html; }
+function showLoading(msg) { showState(`<div class="panel-state"><div class="spinner"></div><div>${esc(msg)}</div></div>`); }
+function showError(msg) {
+  showState(`<div class="error-state"><strong>Something went wrong</strong>${esc(msg)}
+    <div style="margin-top:10px;font-size:13px;color:var(--text-dim)">Check that the MuniRadar backend is running on the Mac and Bloomberg is signed in.</div></div>`);
+}
+
+// ─── SEARCH FLOW ───
+let current = null; // { cusip, report, meta, pending:Set, failed:{} }
+
+async function runSearch() {
+  const cusip = document.getElementById('cusip-input').value.trim().toUpperCase();
+  if (cusip.length !== 9) { alert('Please enter a 9-character CUSIP'); return; }
+  const btn = document.getElementById('run-btn');
+  btn.disabled = true;
+  showLoading('Looking up issuer in Bloomberg…');
+  try {
+    const res = await api('/api/lookup', { method: 'POST', body: JSON.stringify({ cusip }) });
+    const look = await res.json();
+    if (look.found) {
+      const choice = await askSaved(look.name, look.saved_at);
+      if (choice === 'view') await openSaved(look.issuer_id, cusip);
+      else await pullNew(cusip);
+    } else {
+      await pullNew(cusip);
+    }
+  } catch (err) {
+    showError(err.message || String(err));
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function askSaved(name, savedAt) {
+  return new Promise(resolve => {
+    const ov = document.getElementById('saved-overlay');
+    document.getElementById('saved-text').innerHTML =
+      `A saved report for <strong>${esc(name)}</strong> from <strong>${esc(fmtDate(savedAt))}</strong> is available.`;
+    ov.hidden = false;
+    const done = choice => { ov.hidden = true; resolve(choice); };
+    document.getElementById('btn-view-saved').onclick = () => done('view');
+    document.getElementById('btn-pull-new').onclick = () => done('new');
+    document.getElementById('btn-view-saved').focus();
+  });
+}
+
+async function openSaved(issuerId, cusip) {
+  showLoading('Opening saved report…');
+  const res = await api(`/api/issuers/${issuerId}`);
+  const p = await res.json();
+  current = { cusip: cusip || (p.cusips || [])[0] || '', report: p.report, bbg: p.bbg || {},
+              meta: { saved: true, saved_at: p.saved_at, cusips: p.cusips }, pending: new Set(), failed: {} };
+  renderReport();
+}
+
+async function pullNew(cusip) {
+  current = { cusip, report: {}, bbg: {}, meta: null, pending: new Set(PARTS.map(x => x[0])), failed: {}, status: 'Starting…', t0: Date.now() };
+  renderReport();
+  const res = await api('/api/report', { method: 'POST', body: JSON.stringify({ cusip, model: DEFAULT_MODEL }) });
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = '';
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    let nl;
+    while ((nl = buf.indexOf('\n')) >= 0) {
+      const line = buf.slice(0, nl).trim();
+      buf = buf.slice(nl + 1);
+      if (line) handleEvent(JSON.parse(line));
+    }
+  }
+  if (current.pending.size) {           // stream ended early
+    current.pending.forEach(p => current.failed[p] = 'Connection closed before this section finished');
+    current.pending.clear();
+    current.status = null;
+    renderReport();
+  }
+}
+
+function handleEvent(ev) {
+  if (ev.event === 'status') current.status = ev.message;
+  else if (ev.event === 'part') { Object.assign(current.report, ev.data); current.pending.delete(ev.part); }
+  else if (ev.event === 'part_error') { current.failed[ev.part] = ev.message; current.pending.delete(ev.part); }
+  else if (ev.event === 'saved') {
+    current.status = null;
+    current.meta = { saved: false, saved_at: ev.issuer.saved_at, cusips: ev.issuer.cusips, seconds: ev.seconds };
+    current.bbg = ev.issuer.bbg || {};
+  }
+  else if (ev.event === 'error') { current.status = null; current.errorMsg = ev.message; }
+  renderReport();
+}
+
+// ─── RENDER ───
+function section(part, html) {
+  if (current.failed[part]) return `<div class="part-error">This section failed: ${esc(current.failed[part])}</div>`;
+  if (current.pending.has(part)) return SKELETON;
+  return html();
+}
+
+function renderReport() {
+  const d = current.report || {};
+  const i = d.issuer || {};
+  const r = d.ratings || {};
+  const bbg = current.bbg || {};
+  const writing = current.pending.size > 0;
+
+  const progress = writing || current.status ? `
+    <div class="progress">
+      <div class="spinner"></div>
+      <span>${esc(current.status || 'Writing report…')}</span>
+      <div class="steps">
+        ${PARTS.map(([k, label]) =>
+          `<span class="step"><span class="dot ${current.failed[k] ? 'fail' : current.pending.has(k) ? '' : 'done'}"></span>${label}</span>`).join('')}
+      </div>
+    </div>` : '';
+
+  const savedBar = current.meta ? `
+    <div class="saved-bar">
+      <div>
+        <span class="pill pill-gold">${current.meta.saved ? 'Saved report' : 'New report · saved'}</span>
+        &nbsp;Generated ${esc(fmtDateTime(current.meta.saved_at))}${current.meta.seconds ? ` in ${Math.round(current.meta.seconds)}s` : ''}
+        ${(current.meta.cusips || []).length ? `<div class="cusips">CUSIPs on file: ${current.meta.cusips.map(esc).join(', ')}</div>` : ''}
+      </div>
+      ${current.meta.saved ? '<button class="btn-outline" onclick="confirmPullNew()">Pull new</button>' : ''}
+    </div>` : '';
+
+  const errorBanner = current.errorMsg ? `<div class="error-state"><strong>Report not saved</strong>${esc(current.errorMsg)}</div>` : '';
+
+  const ratingBadge = (label, cls, obj, bbgVal) => {
+    const val = (obj && obj.rating) || bbgVal;
+    if (!val || val === 'NR') return '';
+    return `<div class="rating-badge ${cls}"><div class="agency">${label}</div><div class="val">${esc(val)}</div><div class="outlook">${esc((obj && obj.outlook) || '')}</div></div>`;
+  };
+
+  // HEADER
+  const header = `
+    <div class="card">
+      ${current.pending.has('overview') && !i.name ? SKELETON : `
+      <div class="issuer-row">
+        <div>
+          <div class="issuer-name">${esc(i.name || bbg.ISSUER || 'Issuer')}</div>
+          ${i.conduit_issuer ? `<div class="conduit">Issued through <em>${esc(i.conduit_issuer)}</em></div>` : ''}
+          <div class="chips">
+            ${i.state ? `<span class="chip">${esc(i.state)}</span>` : ''}
+            ${i.sector ? `<span class="chip">${esc(i.sector)}</span>` : ''}
+            ${i.bond_type ? `<span class="chip">${esc(i.bond_type)}</span>` : ''}
+            <span class="chip neutral">${esc(current.cusip)}</span>
+          </div>
+        </div>
+        <div class="rating-badges">
+          ${ratingBadge("Moody's", 'moodys', r.moodys, bbg.RTG_MOODY)}
+          ${ratingBadge('S&P', 'sp', r.sp, bbg.RTG_SP)}
+          ${ratingBadge('Fitch', 'fitch', r.fitch, bbg.RTG_FITCH)}
+        </div>
+      </div>
+      ${i.description ? `<div class="issuer-desc prose">${md(i.description)}</div>` : ''}`}
+    </div>`;
+
+  // TRIBECA AI ANALYST VIEW
+  const ch = d.credit_horizon || {};
+  const sec = d.sector || {};
+  const view = `
+    <div class="card view-card">
+      ${title('view', 'Tribeca AI Analyst View')}
+      ${section('view', () => `
+        <div class="view-grid">
+          <div class="view-stat"><div class="label">AI view</div>
+            <div class="value" style="color:${recColor(d.overall_recommendation)}">${esc(d.overall_recommendation || '—')}</div>
+            <div class="note">Overall stance on the credit</div></div>
+          <div class="view-stat"><div class="label">Credit horizon</div>
+            <div class="value">${ch.max_years ? `${esc(ch.max_years)} yrs` : '—'}</div>
+            <div class="note">${esc(ch.label || '')}</div></div>
+          <div class="view-stat"><div class="label">Sector outlook</div>
+            <div class="value">${sec.outlook ? `<span class="outlook ${outlookClass(sec.outlook)}" style="font-size:15px">${esc(sec.outlook)}</span>` : (current.pending.has('ratings') ? '…' : '—')}</div>
+            <div class="note">${esc(sec.name || '')}</div></div>
+        </div>
+        <div class="summary-text">${md(d.analyst_summary || '')}</div>`)}
+      <div class="disclosure">${esc(DISCLOSURE)}</div>
+    </div>`;
+
+  // OVERVIEW & SERVICE AREA
+  const sa = d.service_area || {};
+  const overview = `
+    <div class="card">
+      ${title('map', 'Service Area & Economy')}
+      ${section('overview', () => `
+        <div class="kv">
+          <div class="k">Area</div><div class="v">${md(sa.summary || '—')}</div>
+          <div class="k">Population</div><div class="v">${md(sa.population || '—')}</div>
+          <div class="k">Economy</div><div class="v">${md(sa.economy || '—')}</div>
+        </div>
+        ${(sa.component_entities || []).length ? `<div class="sub-title">Entities within the service area (${sa.component_entities.length})</div>
+          <div class="entity-list">${sa.component_entities.map(e => `<span>${esc(e)}</span>`).join('')}</div>` : ''}
+        <div class="two-col" style="margin-top:6px">
+          <div><div class="sub-title">Top employers</div>${list(sa.top_employers)}</div>
+          <div><div class="sub-title">Top taxpayers / customers</div>${list(sa.top_taxpayers_or_customers)}</div>
+        </div>`)}
+    </div>`;
+
+  // OPERATIONS
+  const op = d.operations || {};
+  const operations = `
+    <div class="card">
+      ${title('ops', 'Operations & Governance')}
+      ${section('operations', () => `
+        <div class="prose">${md(op.summary || '')}</div>
+        <div class="sub-title">Governance &amp; management</div>
+        <div class="prose">${md(op.governance || '—')}</div>
+        ${(op.key_facts || []).length ? `<div class="sub-title">Key facts</div>${list(op.key_facts)}` : ''}`)}
+    </div>`;
+
+  // REVENUE + PLEDGE
+  const revenue = `
+    <div class="two-col">
+      <div class="card">
+        ${title('revenue', 'Revenue Sources')}
+        ${section('operations', () => (d.revenue_sources || []).map(s => `
+          <div class="rev-item">
+            <span class="rev-share">${esc(s.share || '—')}</span>
+            <div><div class="rev-source">${esc(s.source)}</div>${s.notes ? `<div class="rev-note">${md(s.notes)}</div>` : ''}</div>
+          </div>`).join('') || '<span class="muted">—</span>')}
+      </div>
+      <div class="card">
+        ${title('shield', 'Security Pledge')}
+        ${section('operations', () => `<div class="pledge-box">${md(d.security_pledge || 'Not specified')}</div>`)}
+      </div>
+    </div>`;
+
+  // KEY METRICS
+  const vsBadge = m => {
+    const v = (m.vs_median || '').toLowerCase();
+    if (v === 'in-line' || v === 'inline') return '<span class="vs flat">In-line</span>';
+    const arrow = v === 'above' ? '▲ Above' : v === 'below' ? '▼ Below' : esc(m.vs_median || '—');
+    return `<span class="vs ${m.favorable ? 'good' : 'bad'}">${arrow}</span>`;
+  };
+  const metrics = `
+    <div class="card">
+      ${title('metrics', 'Key Financial Metrics vs Sector Median')}
+      ${section('metrics', () => `
+        <div class="table-wrap"><table class="metrics-table">
+          <colgroup><col class="c-name"><col class="c-val"><col class="c-med"><col class="c-vs"><col class="c-note"></colgroup>
+          <thead><tr><th>Metric</th><th>Issuer</th><th>Median</th><th>vs Median</th><th>Context</th></tr></thead>
+          <tbody>${(d.key_metrics || []).map(m => `
+            <tr>
+              <td class="m-name">${esc(m.metric)}</td>
+              <td class="m-val">${esc(m.value)}</td>
+              <td class="m-med">${esc(m.median || '—')}</td>
+              <td>${vsBadge(m)}</td>
+              <td class="m-note">${md(m.notes || '')}</td>
+            </tr>`).join('')}</tbody>
+        </table></div>`)}
+    </div>`;
+
+  // RATINGS
+  const agencyRow = (label, color, o) => o && o.rating && o.rating !== 'NR' ? `
+    <div class="ra-row"><div class="ra-agency" style="color:${color}">${label}</div>
+      <div><strong>${esc(o.rating)}</strong> · ${esc(o.outlook || '')}${o.last_action_date ? ` <span class="muted">(${esc(o.last_action_date)})</span>` : ''}
+      <div class="tl-detail">${md(o.last_action || '')}</div></div></div>` : '';
+  const ratings = `
+    <div class="card">
+      ${title('ratings', 'Ratings & Rating Actions')}
+      ${section('ratings', () => `
+        <div class="rating-actions">
+          ${agencyRow("MOODY'S", '#e05c5c', r.moodys)}${agencyRow('S&amp;P', '#3b82f6', r.sp)}${agencyRow('FITCH', '#8b5cf6', r.fitch)}
+        </div>
+        ${(d.rating_history || []).length ? `<div class="sub-title">Rating action history</div>
+          <div class="timeline">${d.rating_history.map(h => `
+            <div class="tl-item"><div class="tl-date">${esc(h.date)}</div>
+              <div><div class="tl-head">${esc(h.agency)} · ${esc(h.action)}</div><div class="tl-detail">${md(h.detail || '')}</div></div></div>`).join('')}</div>` : ''}`)}
+    </div>`;
+
+  // STRENGTHS / RISKS
+  const srList = (arr, good) => (arr || []).map(x => `
+    <div class="sr-item"><span class="sr-icon ${good ? 'good' : 'bad'}">${good ? ICONS.check : ICONS.alert}</span>
+      <div><div class="sr-title">${md(x.title || x)}</div>${x.detail ? `<div class="sr-detail">${md(x.detail)}</div>` : ''}</div></div>`).join('');
+  const strengthsRisks = `
+    <div class="two-col">
+      <div class="card">${title('balance', 'Key Strengths')}${section('credit', () => srList(d.strengths, true))}</div>
+      <div class="card">${title('balance', 'Key Risks')}${section('credit', () => srList(d.risks, false))}</div>
+    </div>`;
+
+  // SECTOR
+  const sector = `
+    <div class="card">
+      ${title('sector', 'Sector Summary & Outlook', sec.outlook ? `<span class="outlook ${outlookClass(sec.outlook)}">${esc(sec.outlook)}</span>` : '')}
+      ${section('ratings', () => `
+        <div class="prose">${md(sec.summary || '')}</div>
+        ${sec.issuer_vs_sector ? `<div class="prose"><strong>Issuer vs sector:</strong> ${md(sec.issuer_vs_sector)}</div>` : ''}`)}
+    </div>`;
+
+  // NEWS
+  const impactCls = x => x === 'positive' ? 'o-pos' : x === 'negative' ? 'o-neg' : 'o-stab';
+  const news = `
+    <div class="card">
+      ${title('news', 'Recent Developments')}
+      ${section('ratings', () => (d.recent_developments || []).length ? `<div class="timeline">${d.recent_developments.map(n => `
+        <div class="tl-item"><div class="tl-date">${esc(n.date)}</div>
+          <div><div class="tl-head">${md(n.headline)} <span class="impact ${impactCls(n.impact)}">${esc(n.impact || '')}</span></div>
+          ${n.detail ? `<div class="tl-detail">${md(n.detail)}</div>` : ''}</div></div>`).join('')}</div>`
+        : '<span class="muted">No recent developments on record</span>')}
+    </div>`;
+
+  // HORIZON + INVESTABILITY
+  const inv = d.investability || {};
+  const horizon = `
+    <div class="card">
+      ${title('clock', 'Credit Horizon & Investability by Tenor', '<span class="muted">Tribeca AI Analyst View · credit risk only</span>')}
+      ${section('view', () => `
+        ${ch.rationale ? `<div class="prose" style="margin-bottom:16px"><strong>${esc(ch.label || '')}:</strong> ${md(ch.rationale)}</div>` : ''}
+        <div class="invest-grid">
+          ${['1yr','5yr','10yr','15yr','20yr'].map(t => {
+            const c = inv[t] || {};
+            const k = verdictClass(c.verdict);
+            return `<div class="invest-cell i-${k}"><div class="invest-tenor">${t}</div>
+              <div class="invest-verdict c-${k}">${esc(c.verdict || '—')}</div>
+              <div class="invest-rationale">${md(c.rationale || '')}</div></div>`;
+          }).join('')}
+        </div>
+        ${(d.what_would_change_view || []).length ? `<div class="sub-title">What would change the view</div>${list(d.what_would_change_view)}` : ''}`)}
+      <div class="disclosure">${esc(DISCLOSURE)}</div>
+    </div>`;
+
+  const dataNote = d.data_note ? `<div class="data-note">Sources: ${md(d.data_note)}</div>` : '';
+
+  showState(`<div class="report">
+    ${progress}${errorBanner}${savedBar}
+    ${header}${view}${overview}${operations}${revenue}${metrics}${ratings}${strengthsRisks}${sector}${news}${horizon}${dataNote}
+  </div>`);
+}
+
+function confirmPullNew() {
+  if (!current || !current.cusip) return;
+  if (!confirm('Pull a new report for this issuer? It will replace the saved report.')) return;
+  const btn = document.getElementById('run-btn');
+  btn.disabled = true;
+  pullNew(current.cusip).catch(err => showError(err.message || String(err))).finally(() => btn.disabled = false);
+}
+
+// ─── LIBRARY ───
+let libraryItems = [];
 
 async function openLibrary() {
   document.getElementById('library-overlay').hidden = false;
   document.getElementById('library-search').value = '';
-  document.getElementById('library-list').innerHTML = '<div class="library-empty">Loading…</div>';
+  document.getElementById('library-list').innerHTML = '<div class="lib-empty">Loading…</div>';
   try {
-    libraryCards = await libraryFetch('/api/cards');
+    libraryItems = await (await api('/api/issuers')).json();
     renderLibrary();
   } catch (err) {
     document.getElementById('library-count').textContent = '';
     document.getElementById('library-list').innerHTML =
-      `<div class="library-empty" style="color:var(--red)">Couldn't load library — is the backend running?<br><span style="font-size:11px;color:var(--text-dim)">${escHtml(err.message)}</span></div>`;
+      `<div class="lib-empty" style="color:var(--red)">Couldn't load the library — is the backend running?<br><span style="font-size:13px;color:var(--text-dim)">${esc(err.message)}</span></div>`;
   }
 }
-
-function closeLibrary() {
-  document.getElementById('library-overlay').hidden = true;
-}
+function closeLibrary() { document.getElementById('library-overlay').hidden = true; }
 
 function renderLibrary() {
   const q = document.getElementById('library-search').value.trim().toLowerCase();
-  const rows = q
-    ? libraryCards.filter(c => [(c.cusips || []).join(' '), c.issuer, c.state, c.sector, c.recommendation].join(' ').toLowerCase().includes(q))
-    : libraryCards;
-
-  document.getElementById('library-count').textContent = `${libraryCards.length} saved`;
-
+  const rows = q ? libraryItems.filter(x => [x.name, x.state, x.sector, (x.cusips || []).join(' ')].join(' ').toLowerCase().includes(q)) : libraryItems;
+  document.getElementById('library-count').textContent = `${libraryItems.length} saved`;
   if (!rows.length) {
     document.getElementById('library-list').innerHTML =
-      `<div class="library-empty">${libraryCards.length ? 'No matches' : 'No saved cards yet — every analysis you run is saved here automatically.'}</div>`;
+      `<div class="lib-empty">${libraryItems.length ? 'No matches' : 'No saved issuers yet. Every new report is saved here automatically.'}</div>`;
     return;
   }
-
-  const recColor = rec => ({ 'BUY': 'var(--green)', 'HOLD': 'var(--amber)', 'REDUCE': 'var(--red)', 'AVOID': 'var(--red)' }[rec] || 'var(--text-muted)');
-
-  document.getElementById('library-list').innerHTML = rows.map(c => `
-    <div class="library-item" onclick="openSavedCard(${c.id})">
-      <div class="library-item-main">
-        <div class="library-item-name">${escHtml(c.issuer || 'Unknown Issuer')}</div>
-        <div class="library-item-meta" title="${escHtml((c.cusips || []).join(', '))}">${escHtml(cusipSummary(c.cusips))} · ${escHtml(c.state || '—')} · ${escHtml(fmtSavedAt(c.saved_at))}</div>
+  document.getElementById('library-list').innerHTML = rows.map(x => `
+    <div class="lib-item" onclick="openFromLibrary(${x.id})">
+      <div class="lib-main">
+        <div class="lib-name">${esc(x.name || 'Unknown issuer')}</div>
+        <div class="lib-meta">${esc([x.state, x.sector].filter(Boolean).join(' · '))} · ${esc(fmtDate(x.saved_at))} · ${(x.cusips || []).length} CUSIP${(x.cusips || []).length === 1 ? '' : 's'}</div>
       </div>
-      <span class="library-rec" style="color:${recColor(c.recommendation)}">${escHtml(c.recommendation || '')}</span>
-      <button class="library-del" title="Delete" onclick="event.stopPropagation(); deleteSavedCard(${c.id})">×</button>
+      <span class="lib-rec" style="color:${recColor(x.recommendation)}">${esc(x.recommendation || '')}</span>
+      <button class="lib-del" title="Remove from library" aria-label="Remove" onclick="event.stopPropagation(); deleteIssuer(${x.id})">×</button>
     </div>`).join('');
 }
 
-async function openSavedCard(id) {
-  try {
-    const { cusip, intel } = await libraryFetch(`/api/cards/${id}`);
-    closeLibrary();
-    document.getElementById('cusip-input').value = cusip;
-    renderCard(intel, cusip);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  } catch (err) {
-    alert(`Couldn't open card: ${err.message}`);
-  }
+async function openFromLibrary(id) {
+  closeLibrary();
+  try { await openSaved(id); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+  catch (err) { showError(err.message || String(err)); }
 }
 
-async function deleteSavedCard(id) {
-  const card = libraryCards.find(c => c.id === id);
-  if (!confirm(`Delete saved card for ${card ? (card.issuer || card.cusip) : 'this CUSIP'}?`)) return;
+async function deleteIssuer(id) {
+  const x = libraryItems.find(i => i.id === id);
+  if (!confirm(`Remove ${x ? x.name : 'this issuer'} from the library?`)) return;
   try {
-    await libraryFetch(`/api/cards/${id}`, { method: 'DELETE' });
-    libraryCards = libraryCards.filter(c => c.id !== id);
+    await api(`/api/issuers/${id}`, { method: 'DELETE' });
+    libraryItems = libraryItems.filter(i => i.id !== id);
     renderLibrary();
-  } catch (err) {
-    alert(`Couldn't delete: ${err.message}`);
-  }
+  } catch (err) { alert(`Couldn't remove: ${err.message}`); }
 }
 
 document.getElementById('library-search').addEventListener('input', renderLibrary);
-document.getElementById('library-overlay').addEventListener('click', e => {
-  if (e.target === document.getElementById('library-overlay')) closeLibrary();
-});
-document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') closeLibrary();
-});
-
-// Enter key on CUSIP runs analysis
-document.getElementById('cusip-input').addEventListener('keydown', e => {
-  if (e.key === 'Enter') runIntel();
-});
-
-// Close settings on overlay click
-document.getElementById('settings-overlay').addEventListener('click', e => {
-  if (e.target === document.getElementById('settings-overlay')) closeSettings();
-});
+document.getElementById('library-overlay').addEventListener('click', e => { if (e.target.id === 'library-overlay') closeLibrary(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLibrary(); });
+document.getElementById('cusip-input').addEventListener('keydown', e => { if (e.key === 'Enter') runSearch(); });
 </script>
+</body>
+</html>
