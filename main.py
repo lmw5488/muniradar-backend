@@ -25,7 +25,7 @@ app.add_middleware(
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 BRAVE_API_KEY     = os.environ.get("BRAVE_API_KEY", "")
 DEFAULT_MODEL     = os.environ.get("DEFAULT_MODEL", "claude-sonnet-5-5")
-BACKEND_VERSION   = "2026-10-29h (rating actions banner)"
+BACKEND_VERSION   = "2026-10-29i (reads full rating/financial reports)"
 NAME_MODEL        = os.environ.get("NAME_MODEL", "claude-haiku-5-5")   # fast model for issuer-name expansion
 DB_PATH           = os.environ.get("MUNIRADAR_DB", os.path.join(os.path.dirname(os.path.abspath(__file__)), "muniradar.db"))
 
@@ -48,7 +48,7 @@ Return ONLY valid JSON matching this exact schema — no preamble, no markdown, 
   ],
   "security_pledge": "Describe the legal pledge securing these bonds — property tax levy, net revenues, rate covenant, state intercept, etc. Be specific about priority.",
   "key_metrics": [
-    { "metric": "Metric name", "value": "Reported value with units", "vs_median": "above | below | in-line", "notes": "Context vs sector median" }
+    { "metric": "Metric name", "value": "Value with units AND its fiscal year, e.g. '1.9x (FY2025)'", "vs_median": "above | below | in-line", "notes": "Context vs sector median; say so if this is not the latest fiscal year" }
   ],
   "strengths": ["Strength 1 — specific, factual", "Strength 2", "Strength 3"],
   "risks": ["Risk 1 — specific, factual", "Risk 2", "Risk 3"],
@@ -71,6 +71,8 @@ Return ONLY valid JSON matching this exact schema — no preamble, no markdown, 
   "analyst_note": "2-3 sentence Tribeca AI Analyst take on the ISSUER's credit (not this specific bond): the single most important thing to know about this credit right now, and what would change the view. Be direct and opinionated.",
   "data_note": "Brief disclosure about data currency and sources used in this analysis — specify whether Bloomberg or EMMA was used for issuer identification, and how ratings were sourced"
 }
+
+KEY METRICS: use the MOST RECENT fiscal year available. The '## Full Text of Recent Reports' section (rating agency releases, financial statements) is the best source for current figures — prefer it over your training data. Always state the fiscal year of each figure.
 
 This is ISSUER-LEVEL credit research: the same card is reused for every CUSIP from this issuer, so never let a single bond's maturity, call, coupon or price drive any judgment. Be specific to the actual issuer. Use real figures where known. Do not give generic muni boilerplate. If data is uncertain, say so in the notes fields rather than omitting or fabricating. Distinguish between bond types within an issuer (e.g. LADWP Power vs Water; LAUSD GO vs COPs). When live web data is provided in the prompt, prioritize it over your training data for recent developments."""
 
@@ -453,6 +455,103 @@ def format_search_results(results: list[dict], label: str) -> str:
     return "\n".join(lines)
 
 
+# ── Full text of the most useful report pages ────────────────────────────────
+# Snippets rarely contain the numbers. Rating-agency releases (Fitch, KBRA, S&P, Moody's)
+# and issuer financial pages usually list the latest fiscal year's coverage, liquidity,
+# leverage — so open the best few and give Claude the text.
+
+_REPORT_DOMAIN_SCORE = {
+    "fitchratings.com": 10, "kbra.com": 10, "spglobal.com": 9, "moodys.com": 9,
+    "businesswire.com": 8, "prnewswire.com": 6, "bondbuyer.com": 5, "emma.msrb.org": 0,
+}
+_SKIP_DOMAINS = ("youtube.com", "linkedin.com", "facebook.com", "twitter.com", "x.com", "wikipedia.org")
+_UA = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/537.36 (KHTML, like Gecko) "
+                     "Chrome/126.0 Safari/537.36"}
+
+
+def _domain(url: str) -> str:
+    m = re.match(r"https?://([^/]+)", url or "")
+    return (m.group(1).lower() if m else "").removeprefix("www.")
+
+
+def pick_report_urls(*result_lists, limit: int = 3) -> list:
+    scored, seen = [], set()
+    for results in result_lists:
+        for r in results or []:
+            url, dom = r.get("url", ""), _domain(r.get("url", ""))
+            if not url or url in seen or any(dom.endswith(d) for d in _SKIP_DOMAINS):
+                continue
+            seen.add(url)
+            score = next((v for d, v in _REPORT_DOMAIN_SCORE.items() if dom.endswith(d)), None)
+            if score is None:
+                score = 7 if (dom.endswith(".gov") or dom.endswith(".org") or "investor" in url.lower()) else 3
+            if score <= 0:
+                continue
+            scored.append((score, r.get("date") or "", url))
+    scored.sort(key=lambda x: (x[0], x[1]), reverse=True)
+    return [u for _, _, u in scored[:limit]]
+
+
+def _html_to_text(raw: str) -> str:
+    # Many agency sites (e.g. Fitch) render from embedded JSON — pull long strings out of scripts too
+    script_strings = []
+    for js in re.findall(r"<script[^>]*>([\s\S]*?)</script>", raw, flags=re.I):
+        for m in re.findall(r'"((?:[^"\\]|\\.){120,})"', js):
+            try:
+                script_strings.append(json.loads(f'"{m}"'))
+            except Exception:
+                pass
+    body = re.sub(r"<(script|style|noscript|svg|nav|footer|header)[^>]*>[\s\S]*?</\1>", " ", raw, flags=re.I)
+    body = re.sub(r"<br\s*/?>|</p>|</li>|</h\d>|</tr>", "\n", body, flags=re.I)
+    text = html.unescape(re.sub(r"<[^>]+>", " ", body))
+    if len(text.split()) < 150 and script_strings:
+        text += "\n" + "\n".join(html.unescape(re.sub(r"<[^>]+>", " ", s)) for s in script_strings)
+    text = re.sub(r"[ \t\r\f\v]+", " ", text)
+    return re.sub(r"\n\s*\n+", "\n", text).strip()
+
+
+async def fetch_page_text(client: httpx.AsyncClient, url: str, max_chars: int = 7000) -> str:
+    try:
+        resp = await client.get(url, headers=_UA, follow_redirects=True, timeout=8.0)
+        if resp.status_code != 200 or len(resp.content) > 6_000_000:
+            return ""
+        ctype = resp.headers.get("content-type", "").lower()
+        if "pdf" in ctype or url.lower().endswith(".pdf"):
+            try:
+                import io
+                from pypdf import PdfReader          # optional: pip install pypdf
+                reader = PdfReader(io.BytesIO(resp.content))
+                text = "\n".join((pg.extract_text() or "") for pg in reader.pages[:10])
+            except Exception:
+                return ""
+        else:
+            text = _html_to_text(resp.text)
+        if len(text) < 300:
+            return ""
+        # Start near the substance (agency releases put the numbers under these headings)
+        for marker in ("KEY RATING DRIVERS", "Key Rating Drivers", "RATING RATIONALE", "Rating Rationale",
+                       "Credit Highlights", "CREDIT HIGHLIGHTS", "Financial Highlights", "FINANCIAL HIGHLIGHTS"):
+            i = text.find(marker)
+            if i > 0:
+                text = text[max(0, i - 300):]
+                break
+        return text[:max_chars]
+    except Exception:
+        return ""
+
+
+async def fetch_report_texts(urls: list) -> str:
+    if not urls:
+        return ""
+    async with httpx.AsyncClient(timeout=httpx.Timeout(8.0, connect=4.0)) as client:
+        texts = await asyncio.gather(*[fetch_page_text(client, u) for u in urls], return_exceptions=True)
+    parts = [f"### Source: {u}\n{t}" for u, t in zip(urls, texts) if isinstance(t, str) and t]
+    if not parts:
+        return ""
+    return ("\n\n## Full Text of Recent Reports (rating agency releases / financial reports — use for the latest "
+            "fiscal-year metrics, ratings and outlooks)\n" + "\n\n".join(parts) + "\n")
+
+
 async def gather_web_data(cusip: str, issuer_name: str, include_ratings_search: bool = False) -> str:
     """Run web enrichment in parallel, hard cap 25s (allows for rate-limit retries)."""
     async def _fetch_all():
@@ -511,10 +610,18 @@ async def gather_web_data(cusip: str, issuer_name: str, include_ratings_search: 
     if not sections:
         return ""
 
+    # Open the best few report pages and read their full text (hard cap 12s)
+    try:
+        reports = await asyncio.wait_for(
+            fetch_report_texts(pick_report_urls(ratings_results, fitch_results, sp_results, moodys_results, credit_results)),
+            timeout=12.0)
+    except asyncio.TimeoutError:
+        reports = ""
+
     today = datetime.now().strftime("%B %d, %Y")
     return (f"\n\n## Live Web Data Retrieved at Request Time (today is {today})\n"
             "Items are dated where the source provides a date. Newer information here OVERRIDES your training data.\n"
-            + "\n\n".join(sections) + "\n")
+            + "\n\n".join(sections) + "\n" + reports)
 
 
 # ── Issuer identity: Bloomberg -> OpenFIGI -> EMMA ───────────────────────────
