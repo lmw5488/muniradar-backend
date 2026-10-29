@@ -2,6 +2,9 @@ import os
 import json
 import re
 import asyncio
+import sqlite3
+import time
+from datetime import datetime, timezone
 import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,6 +24,7 @@ app.add_middleware(
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 BRAVE_API_KEY     = os.environ.get("BRAVE_API_KEY", "")
 DEFAULT_MODEL     = os.environ.get("DEFAULT_MODEL", "claude-sonnet-4-6")
+DB_PATH           = os.environ.get("MUNIRADAR_DB", os.path.join(os.path.dirname(os.path.abspath(__file__)), "muniradar.db"))
 
 SYSTEM_PROMPT = """You are a senior municipal credit analyst at The Tribeca Group, a professional fixed income portfolio management team at Morgan Stanley. Your job is to produce rigorous, opinionated credit intelligence cards for muni bond CUSIPs. You have deep expertise in municipal credit structures, revenue pledge analysis, intercept mechanisms, sector benchmarks, and investability frameworks.
 
@@ -261,6 +265,66 @@ def format_emma_data(issuer_name: str, cusip: str) -> str:
     return "\n".join(lines)
 
 
+# ── OpenFIGI fallback — Bloomberg's free public identifier service ───────────
+# No Terminal needed. Returns Bloomberg's own name/ticker for the CUSIP.
+
+OPENFIGI_API_KEY = os.environ.get("OPENFIGI_API_KEY", "")  # optional; raises rate limit
+
+
+async def get_issuer_from_openfigi(cusip: str) -> dict:
+    """Look up the CUSIP on OpenFIGI. Returns {} if not found or unreachable."""
+    headers = {"Content-Type": "application/json"}
+    if OPENFIGI_API_KEY:
+        headers["X-OPENFIGI-APIKEY"] = OPENFIGI_API_KEY
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                "https://api.openfigi.com/v3/mapping",
+                headers=headers,
+                json=[{"idType": "ID_CUSIP", "idValue": cusip}],
+            )
+        if resp.status_code != 200:
+            return {}
+        result = resp.json()
+        items = (result[0] or {}).get("data") if isinstance(result, list) and result else None
+        if not items:
+            return {}
+        item = items[0]
+        if not item.get("name"):
+            return {}
+        return {
+            "name":         item.get("name", ""),
+            "ticker":       item.get("ticker", ""),
+            "security_type": item.get("securityType", ""),
+            "market_sector": item.get("marketSector", ""),
+            "figi":         item.get("figi", ""),
+        }
+    except Exception:
+        return {}
+
+
+def openfigi_search_name(name: str) -> str:
+    """'NEW YORK CITY-D' -> 'NEW YORK CITY' (drop Bloomberg's series suffix for web searches)."""
+    return re.sub(r"-[A-Z0-9]{1,3}$", "", (name or "").strip())
+
+
+def format_openfigi_data(figi: dict, cusip: str) -> str:
+    """Format OpenFIGI-sourced issuer data as a prompt section."""
+    lines = ["## Verified Bond Data — Bloomberg OpenFIGI (issuer identity verified; ratings from web search)"]
+    lines.append(f"  Bloomberg issuer short name: {figi['name']}")
+    if figi.get("ticker"):
+        lines.append(f"  Bloomberg ticker: {figi['ticker']}")
+    if figi.get("market_sector"):
+        lines.append(f"  Market sector: {figi['market_sector']}")
+    if figi.get("security_type"):
+        lines.append(f"  Security type: {figi['security_type']}")
+    lines.append(f"  CUSIP: {cusip}")
+    lines.append("  Note: Bloomberg's short name may be abbreviated and may carry a series suffix (e.g. '-D'). "
+                 "Expand it to the issuer's full official name, but do not change WHICH entity it is.")
+    lines.append("  Note: Bloomberg Terminal unavailable. Ratings sourced from live web data below — treat as indicative.")
+    return "\n".join(lines)
+
+
 # ── Web enrichment helpers ────────────────────────────────────────────────────
 
 async def brave_search(client: httpx.AsyncClient, query: str, count: int = 5) -> list[dict]:
@@ -371,33 +435,17 @@ async def gather_web_data(cusip: str, issuer_name: str, include_ratings_search: 
     return "\n\n## Live Web Data Retrieved at Request Time\n" + "\n\n".join(sections) + "\n"
 
 
-# ── Request model ─────────────────────────────────────────────────────────────
+# ── Issuer identity: Bloomberg -> OpenFIGI -> EMMA ───────────────────────────
 
-class CreditIntelRequest(BaseModel):
-    cusip: str
-    pdf_text: Optional[str] = None
-    model: Optional[str] = None
+_IDENTITY_CACHE: dict = {}   # cusip -> (timestamp, identity); reused by lookup -> report
 
 
-# ── Routes ────────────────────────────────────────────────────────────────────
-
-@app.get("/")
-def health():
-    return {
-        "status": "ok",
-        "service": "MuniRadar Credit Intel API",
-        "web_enrichment": bool(BRAVE_API_KEY),
-        "bloomberg": "preferred (EMMA fallback active)",
-    }
-
-
-@app.post("/api/credit-intel")
-async def credit_intel(req: CreditIntelRequest):
-    if not ANTHROPIC_API_KEY:
-        raise HTTPException(status_code=500, detail="ANTHROPIC_API_KEY not configured on server")
-
-    cusip = req.cusip.strip().upper()
-    model = req.model or DEFAULT_MODEL
+async def resolve_identity(cusip: str) -> dict:
+    """Identify the issuer behind a CUSIP from verified sources, in order of preference.
+    Returns {data_source, issuer_name, section, blp_data}."""
+    hit = _IDENTITY_CACHE.get(cusip)
+    if hit and time.time() - hit[0] < 600:
+        return hit[1]
 
     # ── Step 1: Try Bloomberg first ──
     blp_data = {}
@@ -413,16 +461,156 @@ async def credit_intel(req: CreditIntelRequest):
     except (asyncio.TimeoutError, RuntimeError):
         blp_data = {}
 
-    # ── Step 2: Fall back to EMMA if Bloomberg unavailable or returned nothing ──
+    # ── Step 2: Fall back to OpenFIGI (Bloomberg's free identifier service), then EMMA ──
     if not blp_data or not issuer_name:
-        data_source = "emma"
-        issuer_name = await get_issuer_from_emma(cusip)
-        if issuer_name:
-            bloomberg_section = format_emma_data(issuer_name, cusip)
+        figi = await get_issuer_from_openfigi(cusip)
+        if figi:
+            data_source = "openfigi"
+            issuer_name = openfigi_search_name(figi["name"])
+            bloomberg_section = format_openfigi_data(figi, cusip)
         else:
-            # No verified source — still proceed but warn Claude explicitly
-            bloomberg_section = f"## Bond Identification\n  CUSIP: {cusip}\n  WARNING: Neither Bloomberg nor EMMA returned issuer data. Do NOT guess the issuer name. Set issuer name to 'Unknown — CUSIP {cusip}' and mark all ratings NR."
-            data_source = "none"
+            data_source = "emma"
+            issuer_name = await get_issuer_from_emma(cusip)
+            if issuer_name:
+                bloomberg_section = format_emma_data(issuer_name, cusip)
+            else:
+                # No verified source — still proceed but warn Claude explicitly
+                bloomberg_section = f"## Bond Identification\n  CUSIP: {cusip}\n  WARNING: Neither Bloomberg, OpenFIGI nor EMMA returned issuer data. Do NOT guess the issuer name. Set issuer name to 'Unknown — CUSIP {cusip}' and mark all ratings NR."
+                data_source = "none"
+
+    identity = {"data_source": data_source, "issuer_name": issuer_name,
+                "section": bloomberg_section, "blp_data": blp_data}
+    if data_source != "none":
+        _IDENTITY_CACHE[cusip] = (time.time(), identity)
+    return identity
+
+
+# ── Issuer library (SQLite) — one saved report per issuer ────────────────────
+
+def now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def init_db():
+    with db() as conn:
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS issuers (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                issuer_key  TEXT UNIQUE,
+                name        TEXT,
+                state       TEXT,
+                sector      TEXT,
+                report_json TEXT NOT NULL,
+                bbg_json    TEXT,
+                seconds     REAL,
+                saved_at    TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS issuer_cusips (
+                cusip      TEXT PRIMARY KEY,
+                issuer_id  INTEGER NOT NULL,
+                added_at   TEXT NOT NULL
+            );
+        """)
+
+
+init_db()
+
+
+def issuer_key(name: str) -> str:
+    return re.sub(r"[^A-Z0-9]", "", (name or "").upper())
+
+
+def find_issuer(conn, cusip: str, key: str = "") -> Optional[int]:
+    row = conn.execute("SELECT issuer_id FROM issuer_cusips WHERE cusip = ?", (cusip,)).fetchone()
+    if row:
+        return row["issuer_id"]
+    if key:
+        row = conn.execute("SELECT id FROM issuers WHERE issuer_key = ?", (key,)).fetchone()
+        if row:
+            return row["id"]
+    return None
+
+
+def link_cusip(conn, issuer_id: int, cusip: str):
+    conn.execute(
+        "INSERT INTO issuer_cusips (cusip, issuer_id, added_at) VALUES (?,?,?) "
+        "ON CONFLICT(cusip) DO UPDATE SET issuer_id = excluded.issuer_id",
+        (cusip, issuer_id, now_iso()),
+    )
+
+
+def library_meta(conn, issuer_id: int) -> Optional[dict]:
+    r = conn.execute("SELECT id, name, saved_at FROM issuers WHERE id = ?", (issuer_id,)).fetchone()
+    if not r:
+        return None
+    cusips = [x["cusip"] for x in conn.execute(
+        "SELECT cusip FROM issuer_cusips WHERE issuer_id = ? ORDER BY added_at, cusip", (issuer_id,))]
+    return {"issuer_id": r["id"], "name": r["name"], "saved_at": r["saved_at"], "cusips": cusips}
+
+
+def save_report(cusip: str, identity: dict, intel: dict) -> dict:
+    """Save as the issuer's report, replacing any older one."""
+    iss  = intel.get("issuer") or {}
+    name = iss.get("name") or identity["issuer_name"] or cusip
+    key  = issuer_key(identity["issuer_name"]) or issuer_key(name)
+    vals = (name, iss.get("state"), iss.get("sector"), json.dumps(intel),
+            json.dumps(identity.get("blp_data") or {}), now_iso())
+    with db() as conn:
+        iid = find_issuer(conn, cusip, key)
+        if iid:
+            conn.execute("UPDATE issuers SET name=?, state=?, sector=?, report_json=?, bbg_json=?, saved_at=? WHERE id=?",
+                         vals + (iid,))
+        else:
+            cur = conn.execute("INSERT INTO issuers (name, state, sector, report_json, bbg_json, saved_at, issuer_key) "
+                               "VALUES (?,?,?,?,?,?,?)", vals + (key,))
+            iid = cur.lastrowid
+        link_cusip(conn, iid, cusip)
+        return library_meta(conn, iid)
+
+
+# ── Request models ────────────────────────────────────────────────────────────
+
+class CreditIntelRequest(BaseModel):
+    cusip: str
+    pdf_text: Optional[str] = None
+    model: Optional[str] = None
+
+
+class LookupRequest(BaseModel):
+    cusip: str
+
+
+# ── Routes ────────────────────────────────────────────────────────────────────
+
+@app.get("/")
+def health():
+    return {
+        "status": "ok",
+        "service": "MuniRadar Credit Intel API",
+        "web_enrichment": bool(BRAVE_API_KEY),
+        "bloomberg": "preferred (OpenFIGI, then EMMA fallback active)",
+    }
+
+
+@app.post("/api/credit-intel")
+async def credit_intel(req: CreditIntelRequest):
+    if not ANTHROPIC_API_KEY:
+        raise HTTPException(status_code=500, detail="ANTHROPIC_API_KEY not configured on server")
+
+    cusip = req.cusip.strip().upper()
+    model = req.model or DEFAULT_MODEL
+
+    # ── Steps 1-2: Bloomberg -> OpenFIGI -> EMMA ──
+    identity = await resolve_identity(cusip)
+    data_source       = identity["data_source"]
+    issuer_name       = identity["issuer_name"]
+    bloomberg_section = identity["section"]
 
     # ── Step 3: Web enrichment — use more ratings search if no Bloomberg ──
     include_ratings_search = (data_source != "bloomberg")
@@ -442,6 +630,15 @@ async def credit_intel(req: CreditIntelRequest):
 5. Recent developments — prioritize live web data for anything 2024 or later
 6. Investability by tenor — be granular
 7. In data_note, confirm Bloomberg was primary source"""
+    elif data_source == "openfigi":
+        data_instructions = """Generate a complete credit intelligence card. The issuer above is verified by Bloomberg's OpenFIGI service — that is the entity to analyze. Expand Bloomberg's short name to the full official issuer name (e.g. 'NEW YORK CITY-D' -> 'City of New York'), but do not substitute a different entity. The Bloomberg Terminal was unavailable, so ratings must be sourced from the live web data provided below.
+1. Analyze ONLY the OpenFIGI-identified issuer — do not guess a different one
+2. For ratings: extract them from the live web data (rating agency search results) — be explicit about what you found vs what is uncertain
+3. If ratings are not found in web data, mark as NR and note web search was inconclusive
+4. Revenue sources and security pledge — infer from security type and sector
+5. Recent developments — use live web data
+6. Investability by tenor — be granular
+7. In data_note, note that the issuer was verified via Bloomberg OpenFIGI and ratings sourced from web search"""
     elif data_source == "emma":
         data_instructions = """Generate a complete credit intelligence card. The issuer name above is verified from EMMA — use it exactly. Bloomberg was unavailable so ratings must be sourced from the live web data provided below.
 1. Use ONLY the EMMA-verified issuer name — do not alter or guess it
@@ -497,4 +694,72 @@ async def credit_intel(req: CreditIntelRequest):
     except json.JSONDecodeError as e:
         raise HTTPException(status_code=500, detail=f"JSON parse error: {e}")
 
+    # ── Save to the issuer library (replaces any older report for this issuer) ──
+    if data_source != "none":
+        try:
+            intel["library"] = save_report(cusip, identity, intel)
+        except Exception:
+            pass
+
     return intel
+
+
+@app.post("/api/lookup")
+async def lookup(req: LookupRequest):
+    """Before running a new report: is this CUSIP's issuer already in the library?"""
+    cusip = req.cusip.strip().upper()
+    with db() as conn:
+        iid = find_issuer(conn, cusip)
+    if not iid:
+        identity = await resolve_identity(cusip)
+        if identity["data_source"] != "none":
+            with db() as conn:
+                iid = find_issuer(conn, cusip, issuer_key(identity["issuer_name"]))
+    if not iid:
+        return {"found": False}
+    with db() as conn:
+        link_cusip(conn, iid, cusip)
+        meta = library_meta(conn, iid)
+    return {"found": True, **meta}
+
+
+@app.get("/api/issuers")
+def list_issuers():
+    with db() as conn:
+        rows = conn.execute("""
+            SELECT i.id, i.name, i.state, i.sector, i.saved_at, i.report_json,
+                   (SELECT GROUP_CONCAT(cusip, ',') FROM issuer_cusips c WHERE c.issuer_id = i.id) AS cusips
+            FROM issuers i ORDER BY i.saved_at DESC, i.id DESC
+        """).fetchall()
+    out = []
+    for r in rows:
+        rep = json.loads(r["report_json"] or "{}")
+        out.append({
+            "id": r["id"], "name": r["name"], "state": r["state"], "sector": r["sector"],
+            "saved_at": r["saved_at"],
+            "cusips": r["cusips"].split(",") if r["cusips"] else [],
+            "recommendation": rep.get("overall_recommendation"),
+        })
+    return out
+
+
+@app.get("/api/issuers/{issuer_id}")
+def get_issuer(issuer_id: int):
+    with db() as conn:
+        r = conn.execute("SELECT report_json FROM issuers WHERE id = ?", (issuer_id,)).fetchone()
+        if not r:
+            raise HTTPException(status_code=404, detail="Not found")
+        intel = json.loads(r["report_json"])
+        intel["library"] = library_meta(conn, issuer_id)
+    cusips = intel["library"]["cusips"]
+    return {"cusip": cusips[0] if cusips else "", "intel": intel}
+
+
+@app.delete("/api/issuers/{issuer_id}")
+def delete_issuer(issuer_id: int):
+    with db() as conn:
+        cur = conn.execute("DELETE FROM issuers WHERE id = ?", (issuer_id,))
+        conn.execute("DELETE FROM issuer_cusips WHERE issuer_id = ?", (issuer_id,))
+    if cur.rowcount == 0:
+        raise HTTPException(status_code=404, detail="Not found")
+    return {"deleted": issuer_id}

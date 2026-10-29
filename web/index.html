@@ -2,7 +2,6 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 
 <style>
 /* ─── DARK-FIRST: Tribeca navy design ─── */
@@ -497,9 +496,78 @@ body {
   margin-bottom: 16px;
   display: flex; align-items: center; gap: 8px;
 }
+
+/* ─── SAVED REPORT BAR ─── */
+.saved-bar {
+  background: var(--surface); border: 1px solid var(--border-dim); border-radius: 10px;
+  padding: 10px 16px; font-size: 13px; color: var(--text-muted);
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+}
+.saved-bar .cusips { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+.saved-pill { background: var(--gold-dim); color: var(--gold); font-size: 10px; font-weight: 700; letter-spacing: 0.06em; padding: 2px 7px; border-radius: 3px; text-transform: uppercase; margin-right: 6px; }
+.btn-outline { background: transparent; border: 1px solid var(--border); border-radius: 6px; color: var(--gold); cursor: pointer; font-size: 12px; font-weight: 600; padding: 6px 12px; white-space: nowrap; }
+.btn-outline:hover { background: var(--gold-dim); }
+
+/* ─── SAVED REPORT PROMPT ─── */
+.modal-overlay { position: fixed; inset: 0; z-index: 120; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.modal-overlay[hidden] { display: none; }
+.modal { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 26px; width: 100%; max-width: 460px; }
+.modal h3 { font-family: 'Playfair Display', Georgia, serif; font-size: 20px; color: var(--text); margin-bottom: 10px; }
+.modal p { font-size: 14px; color: var(--text-muted); margin-bottom: 22px; line-height: 1.6; }
+.modal p strong { color: var(--text); }
+.modal-actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+
+/* ─── LIBRARY ─── */
+.library-overlay { position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,0.55); display: flex; justify-content: flex-end; }
+.library-overlay[hidden] { display: none; }
+.library-panel { background: var(--surface); border-left: 1px solid var(--border); width: 100%; max-width: 440px; height: 100%; display: flex; flex-direction: column; }
+.library-head { padding: 20px 20px 14px; border-bottom: 1px solid var(--border-dim); display: flex; flex-direction: column; gap: 12px; }
+.library-head-row { display: flex; align-items: center; justify-content: space-between; }
+.library-head h3 { font-family: 'Playfair Display', Georgia, serif; font-size: 18px; font-weight: 600; color: var(--text); }
+.library-count { font-size: 11px; color: var(--text-muted); margin-left: 8px; font-family: 'Inter', sans-serif; font-weight: 400; }
+.library-search { background: var(--surface-2); border: 1px solid var(--border-dim); border-radius: 6px; color: var(--text); font-size: 13px; padding: 9px 12px; width: 100%; }
+.library-search:focus { outline: none; border-color: var(--gold); }
+.library-list { flex: 1; overflow-y: auto; padding: 8px 12px 20px; }
+.library-item { display: flex; align-items: center; gap: 10px; padding: 10px 8px; border-bottom: 1px solid var(--border-dim); cursor: pointer; border-radius: 6px; }
+.library-item:hover { background: var(--surface-2); }
+.library-item-main { flex: 1; min-width: 0; }
+.library-item-name { font-size: 13px; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.library-item-meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.library-rec { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; flex-shrink: 0; }
+.library-del { background: transparent; border: none; color: var(--text-dim); cursor: pointer; font-size: 16px; line-height: 1; padding: 4px 6px; border-radius: 4px; flex-shrink: 0; }
+.library-del:hover { color: var(--red); background: var(--red-bg); }
+.library-empty { color: var(--text-muted); font-size: 13px; text-align: center; padding: 40px 12px; }
 </style>
 
 <!-- no settings overlay -->
+
+<!-- ─── SAVED REPORT PROMPT ─── -->
+<div class="modal-overlay" id="saved-overlay" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="saved-title">
+    <h3 id="saved-title">Saved report available</h3>
+    <p id="saved-text"></p>
+    <div class="modal-actions">
+      <button class="btn-secondary" id="btn-pull-new">Pull new</button>
+      <button class="btn-primary" id="btn-view-saved">View saved</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── ISSUER LIBRARY ─── -->
+<div class="library-overlay" id="library-overlay" hidden>
+  <div class="library-panel">
+    <div class="library-head">
+      <div class="library-head-row">
+        <h3>Issuer Library<span class="library-count" id="library-count"></span></h3>
+        <button class="btn-icon" onclick="closeLibrary()" title="Close" aria-label="Close">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <input type="text" class="library-search" id="library-search" placeholder="Filter by issuer, CUSIP, state, sector…">
+    </div>
+    <div class="library-list" id="library-list"></div>
+  </div>
+</div>
 
 <!-- ─── PAGE ─── -->
 <header class="header">
@@ -520,6 +588,9 @@ body {
   </div>
   <div class="header-actions">
     <span class="tab-badge">Credit Intel</span>
+    <button class="btn-icon" onclick="openLibrary()" title="Issuer library" aria-label="Issuer library">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+    </button>
     <button class="btn-icon" onclick="openSettings()" title="Settings">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
@@ -533,19 +604,11 @@ body {
 
   <div class="input-card">
     <h2>CUSIP Credit Intel</h2>
-    <p>Drop in a CUSIP and optionally attach a Moody's research report PDF. Hit Run to generate a full credit intelligence card synthesized from public filings and market data.</p>
+    <p>Drop in a CUSIP and hit Run. If the issuer has been run before, you can open the saved report or pull a new one.</p>
     <div class="input-row">
       <div class="field">
         <label>CUSIP</label>
         <input type="text" id="cusip-input" placeholder="e.g. 64966EBQ3" maxlength="9">
-      </div>
-      <div class="field">
-        <label>Moody's Report (optional)</label>
-        <label class="upload-label" id="upload-label" for="pdf-input">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
-          <span id="upload-label-text">Attach PDF…</span>
-        </label>
-        <input type="file" id="pdf-input" accept=".pdf">
       </div>
       <button class="btn-run" id="run-btn" onclick="runIntel()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
@@ -568,11 +631,6 @@ body {
 </main>
 
 <script>
-// pdf.js worker
-if (typeof pdfjsLib !== 'undefined') {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-}
-
 // ─── SETTINGS ───
 const BACKEND_URL = 'https://muniradar.ngrok.app';
 const DEFAULT_MODEL = 'claude-sonnet-4-6';
@@ -587,33 +645,6 @@ function checkApiKey() {
   document.getElementById('api-warn').hidden = true;
 }
 checkApiKey();
-
-// ─── PDF UPLOAD ───
-let pdfText = '';
-document.getElementById('pdf-input').addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  const label = document.getElementById('upload-label');
-  const labelText = document.getElementById('upload-label-text');
-  labelText.textContent = 'Reading PDF…';
-  try {
-    const buf = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
-    let text = '';
-    const maxPages = Math.min(pdf.numPages, 20);
-    for (let i = 1; i <= maxPages; i++) {
-      const page = await pdf.getPage(i);
-      const content = await page.getTextContent();
-      text += content.items.map(item => item.str).join(' ') + '\n';
-    }
-    pdfText = text.trim().slice(0, 12000);
-    label.classList.add('has-file');
-    labelText.textContent = `✓ ${file.name.slice(0,28)}…`;
-  } catch (err) {
-    labelText.textContent = 'Error reading PDF';
-    pdfText = '';
-  }
-});
 
 // ─── LOADING STATE ───
 function showLoading(steps, activeIdx) {
@@ -632,7 +663,10 @@ function showLoading(steps, activeIdx) {
 }
 
 // ─── MAIN RUN ───
-async function runIntel() {
+let loadingTimers = [];
+function clearLoadingTimers() { loadingTimers.forEach(clearTimeout); loadingTimers = []; }
+
+async function runIntel(forceNew) {
   const cusip = document.getElementById('cusip-input').value.trim().toUpperCase();
   if (!cusip || cusip.length < 6) {
     alert('Please enter a valid CUSIP (9 characters)');
@@ -644,6 +678,25 @@ async function runIntel() {
   const btn = document.getElementById('run-btn');
   btn.disabled = true;
 
+  // ── Saved report available? ──
+  if (forceNew !== true) {
+    try {
+      document.getElementById('results-area').innerHTML = `
+        <div class="loading-state"><div class="loading-spinner"></div>
+        <div style="color:var(--text-muted);font-size:13px;">Checking the issuer library…</div></div>`;
+      const look = await libraryFetch('/api/lookup', {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ cusip })
+      });
+      if (look.found && (await askSaved(look.name, look.saved_at)) === 'view') {
+        await openSaved(look.issuer_id, cusip);
+        btn.disabled = false;
+        return;
+      }
+    } catch (err) {
+      // Library check failed — carry on with a new report
+    }
+  }
+
   const steps = [
     'Identifying issuer from CUSIP…',
     'Pulling credit fundamentals…',
@@ -653,16 +706,17 @@ async function runIntel() {
   ];
 
   async function attemptFetch(isRetry) {
+    clearLoadingTimers();
     showLoading(steps, 0);
-    setTimeout(() => showLoading(steps, 1), 800);
-    setTimeout(() => showLoading(steps, 2), 2200);
-    setTimeout(() => showLoading(steps, 3), 4500);
-    setTimeout(() => showLoading(steps, 4), 7000);
+    loadingTimers.push(setTimeout(() => showLoading(steps, 1), 800));
+    loadingTimers.push(setTimeout(() => showLoading(steps, 2), 2200));
+    loadingTimers.push(setTimeout(() => showLoading(steps, 3), 4500));
+    loadingTimers.push(setTimeout(() => showLoading(steps, 4), 7000));
 
     const response = await fetch(`${backendUrl}/api/credit-intel`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ cusip, pdf_text: pdfText || null, model })
+      body: JSON.stringify({ cusip, model })
     });
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
@@ -678,6 +732,7 @@ async function runIntel() {
     } catch (firstErr) {
       // Silent retry on network failure (cold start) — no error shown to user
       if (firstErr instanceof TypeError) {
+        clearLoadingTimers();
         document.getElementById('results-area').innerHTML = `
           <div class="loading-state">
             <div class="loading-spinner"></div>
@@ -689,8 +744,10 @@ async function runIntel() {
         throw firstErr;
       }
     }
+    clearLoadingTimers();
     renderCard(intel, cusip);
   } catch (err) {
+    clearLoadingTimers();
     document.getElementById('results-area').innerHTML = `
       <div class="error-state">
         <strong>Analysis failed</strong>
@@ -731,6 +788,7 @@ function renderCard(d, cusip) {
 
   document.getElementById('results-area').innerHTML = `
   <div class="credit-card">
+    ${savedBar(d.library)}
 
     <!-- HEADER -->
     <div class="card-header">
@@ -872,6 +930,128 @@ function renderCard(d, cusip) {
 
   </div>`;
 }
+
+// ─── ISSUER LIBRARY ───
+let libraryItems = [];
+
+function escHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function fmtDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return isNaN(d) ? iso : d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+}
+function recColorOf(r) { return ({ BUY: 'var(--green)', HOLD: 'var(--amber)', REDUCE: 'var(--red)', AVOID: 'var(--red)' }[r] || 'var(--text-muted)'); }
+
+async function libraryFetch(path, opts = {}) {
+  const res = await fetch(`${BACKEND_URL}${path}`, {
+    ...opts, headers: { 'ngrok-skip-browser-warning': '1', ...(opts.headers || {}) }
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Server error ${res.status}`);
+  }
+  return res.json();
+}
+
+// "A saved report for X from DATE is available."  -> 'view' | 'new'
+function askSaved(name, savedAt) {
+  return new Promise(resolve => {
+    const ov = document.getElementById('saved-overlay');
+    document.getElementById('saved-text').innerHTML =
+      `A saved report for <strong>${escHtml(name)}</strong> from <strong>${escHtml(fmtDate(savedAt))}</strong> is available.`;
+    ov.hidden = false;
+    const done = choice => { ov.hidden = true; resolve(choice); };
+    document.getElementById('btn-view-saved').onclick = () => done('view');
+    document.getElementById('btn-pull-new').onclick = () => done('new');
+    document.getElementById('btn-view-saved').focus();
+  });
+}
+
+async function openSaved(issuerId, cusip) {
+  const { cusip: firstCusip, intel } = await libraryFetch(`/api/issuers/${issuerId}`);
+  if (intel.library) intel.library.viewing = true;
+  renderCard(intel, cusip || firstCusip);
+}
+
+function savedBar(lib) {
+  if (!lib) return '';
+  const cusips = lib.cusips || [];
+  return `
+    <div class="saved-bar">
+      <div>
+        <span class="saved-pill">${lib.viewing ? 'Saved report' : 'Saved to library'}</span>
+        ${lib.viewing ? 'From' : 'Generated'} ${escHtml(fmtDate(lib.saved_at))}
+        ${cusips.length ? `<div class="cusips">CUSIPs on file: ${cusips.map(escHtml).join(', ')}</div>` : ''}
+      </div>
+      ${lib.viewing ? '<button class="btn-outline" onclick="pullNewFromSaved()">Pull new</button>' : ''}
+    </div>`;
+}
+
+function pullNewFromSaved() {
+  if (!confirm('Pull a new report for this issuer? It will replace the saved report.')) return;
+  runIntel(true);
+}
+
+async function openLibrary() {
+  document.getElementById('library-overlay').hidden = false;
+  document.getElementById('library-search').value = '';
+  document.getElementById('library-list').innerHTML = '<div class="library-empty">Loading…</div>';
+  try {
+    libraryItems = await libraryFetch('/api/issuers');
+    renderLibrary();
+  } catch (err) {
+    document.getElementById('library-count').textContent = '';
+    document.getElementById('library-list').innerHTML =
+      `<div class="library-empty" style="color:var(--red)">Couldn't load the library — is the backend running?<br><span style="font-size:11px;color:var(--text-dim)">${escHtml(err.message)}</span></div>`;
+  }
+}
+function closeLibrary() { document.getElementById('library-overlay').hidden = true; }
+
+function renderLibrary() {
+  const q = document.getElementById('library-search').value.trim().toLowerCase();
+  const rows = q ? libraryItems.filter(x => [x.name, x.state, x.sector, (x.cusips || []).join(' ')].join(' ').toLowerCase().includes(q)) : libraryItems;
+  document.getElementById('library-count').textContent = `${libraryItems.length} saved`;
+  if (!rows.length) {
+    document.getElementById('library-list').innerHTML =
+      `<div class="library-empty">${libraryItems.length ? 'No matches' : 'No saved issuers yet. Every new report is saved here automatically.'}</div>`;
+    return;
+  }
+  document.getElementById('library-list').innerHTML = rows.map(x => `
+    <div class="library-item" onclick="openFromLibrary(${x.id})">
+      <div class="library-item-main">
+        <div class="library-item-name">${escHtml(x.name || 'Unknown issuer')}</div>
+        <div class="library-item-meta">${escHtml([x.state, x.sector].filter(Boolean).join(' · '))} · ${escHtml(fmtDate(x.saved_at))} · ${(x.cusips || []).length} CUSIP${(x.cusips || []).length === 1 ? '' : 's'}</div>
+      </div>
+      <span class="library-rec" style="color:${recColorOf(x.recommendation)}">${escHtml(x.recommendation || '')}</span>
+      <button class="library-del" title="Remove from library" aria-label="Remove" onclick="event.stopPropagation(); deleteIssuer(${x.id})">×</button>
+    </div>`).join('');
+}
+
+async function openFromLibrary(id) {
+  closeLibrary();
+  try {
+    await openSaved(id);
+    const lib = libraryItems.find(x => x.id === id);
+    if (lib && lib.cusips && lib.cusips.length) document.getElementById('cusip-input').value = lib.cusips[0];
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  } catch (err) { alert(`Couldn't open report: ${err.message}`); }
+}
+
+async function deleteIssuer(id) {
+  const x = libraryItems.find(i => i.id === id);
+  if (!confirm(`Remove ${x ? x.name : 'this issuer'} from the library?`)) return;
+  try {
+    await libraryFetch(`/api/issuers/${id}`, { method: 'DELETE' });
+    libraryItems = libraryItems.filter(i => i.id !== id);
+    renderLibrary();
+  } catch (err) { alert(`Couldn't remove: ${err.message}`); }
+}
+
+document.getElementById('library-search').addEventListener('input', renderLibrary);
+document.getElementById('library-overlay').addEventListener('click', e => { if (e.target.id === 'library-overlay') closeLibrary(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLibrary(); });
 
 // Enter key on CUSIP runs analysis
 document.getElementById('cusip-input').addEventListener('keydown', e => {
