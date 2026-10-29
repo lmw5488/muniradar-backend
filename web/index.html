@@ -814,10 +814,10 @@ function renderCard(d, cusip) {
         <div class="section-title">Revenue Sources</div>
         ${(d.revenue_sources || []).map(s => `
           <div class="rev-item">
-            <span class="rev-share">${s.share || '—'}</span>
+            <span class="rev-share">${approx(s.share) || '—'}</span>
             <div>
               <div class="rev-source">${s.source}</div>
-              ${s.notes ? `<div class="rev-note">${s.notes}</div>` : ''}
+              ${s.notes ? `<div class="rev-note">${approx(s.notes)}</div>` : ''}
             </div>
           </div>`).join('')}
       </div>
@@ -937,6 +937,10 @@ function fmtDate(iso) {
   if (!iso) return '';
   const d = new Date(iso);
   return isNaN(d) ? iso : d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+}
+// "approximate(ly)" -> "approx." in the revenue sources section
+function approx(s) {
+  return String(s || '').replace(/\b(approximate(?:ly)?)\b\.?/gi, w => (w[0] === 'A' ? 'Approx.' : 'approx.'));
 }
 // Keep just BUY / HOLD / REDUCE / AVOID even if a saved report has a sentence there
 function normRec(r) { const m = String(r || '').toUpperCase().match(/\b(BUY|HOLD|REDUCE|AVOID)\b/); return m ? m[1] : ''; }

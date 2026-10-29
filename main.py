@@ -2,6 +2,7 @@ import os
 import json
 import re
 import asyncio
+import html
 import sqlite3
 import time
 from datetime import datetime, timezone
@@ -24,6 +25,7 @@ app.add_middleware(
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 BRAVE_API_KEY     = os.environ.get("BRAVE_API_KEY", "")
 DEFAULT_MODEL     = os.environ.get("DEFAULT_MODEL", "claude-sonnet-5-5")
+BACKEND_VERSION   = "2026-10-29e (per-agency ratings search)"
 DB_PATH           = os.environ.get("MUNIRADAR_DB", os.path.join(os.path.dirname(os.path.abspath(__file__)), "muniradar.db"))
 
 SYSTEM_PROMPT = """You are a senior municipal credit analyst at The Tribeca Group, a professional fixed income portfolio management team at Morgan Stanley. Your job is to produce rigorous, opinionated credit intelligence cards for muni bond CUSIPs. You have deep expertise in municipal credit structures, revenue pledge analysis, intercept mechanisms, sector benchmarks, and investability frameworks.
@@ -351,12 +353,14 @@ async def brave_search(client: httpx.AsyncClient, query: str, count: int = 5,
             return []
         data = resp.json()
         results = []
+        def clean(t: str) -> str:   # strip <strong> tags and &#x27; style entities
+            return html.unescape(re.sub(r"<[^>]+>", "", t or ""))
         for r in data.get("web", {}).get("results", []):
             results.append({
-                "title":   r.get("title", ""),
+                "title":   clean(r.get("title", "")),
                 "url":     r.get("url", ""),
-                "snippet": r.get("description", ""),
-                "extra":   r.get("extra_snippets", []) or [],
+                "snippet": clean(r.get("description", "")),
+                "extra":   [clean(x) for x in (r.get("extra_snippets", []) or [])],
                 "date":    r.get("page_age", "") or r.get("age", ""),
             })
         return results
@@ -672,6 +676,8 @@ def health():
         "service": "MuniRadar Credit Intel API",
         "web_enrichment": bool(BRAVE_API_KEY),
         "bloomberg": "preferred (OpenFIGI, then EMMA fallback active)",
+        "version": BACKEND_VERSION,
+        "model": DEFAULT_MODEL,
     }
 
 
