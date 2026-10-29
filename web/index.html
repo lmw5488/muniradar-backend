@@ -564,6 +564,48 @@ body {
 .ab-nav:hover { color: var(--gold); background: var(--gold-dim); }
 .ab-count { font-size: 11px; color: var(--text-dim); white-space: nowrap; flex-shrink: 0; font-family: 'IBM Plex Mono', monospace; }
 @media (max-width: 640px) { .ab-label, .ab-count { display: none; } }
+
+/* ─── WIDER PAGE + LARGER TEXT (overrides) ─── */
+.main { max-width: 1280px; padding-left: 8px; padding-right: 8px; }
+body { font-size: 16px; }
+.input-card h2 { font-size: 24px; }
+.input-card p { font-size: 15px; }
+.field label { font-size: 12px; }
+.field input[type="text"] { font-size: 17px; }
+.btn-run { font-size: 14px; }
+.loading-step { font-size: 14px; }
+.issuer-name { font-size: 30px; }
+.chip { font-size: 12px; }
+.rating-badge { min-width: 76px; padding: 8px 12px; }
+.rating-badge .agency { font-size: 10px; }
+.rating-badge .rating-val { font-size: 20px; }
+.rating-badge .outlook { font-size: 12px; }
+.issuer-description { font-size: 16px; line-height: 1.65; }
+.section-card { padding: 22px 24px; }
+.section-title { font-size: 13px; }
+.rev-item { grid-template-columns: 110px minmax(0, 1fr); }
+.rev-share { font-size: 15px; }
+.rev-source { font-size: 15px; }
+.rev-note { font-size: 13px; }
+.pledge-box { font-size: 15px; line-height: 1.6; }
+.metric-name { font-size: 14px; }
+.metric-value { font-size: 15px; }
+.vs-badge { font-size: 11px; }
+.str-risk-item { font-size: 15px; line-height: 1.55; }
+.news-date { font-size: 12px; }
+.impact-pill { font-size: 11px; }
+.news-headline { font-size: 15px; }
+.news-detail { font-size: 14px; }
+.invest-tenor { font-size: 12px; }
+.invest-verdict { font-size: 13px; }
+.invest-rationale { font-size: 13px; line-height: 1.45; }
+.analyst-label { font-size: 12px; }
+.analyst-text { font-size: 17px; }
+.analyst-rec { font-size: 14px; }
+.data-note { font-size: 13px; }
+.saved-bar { font-size: 14px; }
+.ab-item { font-size: 14px; }
+.api-warn[hidden] { display: none; }   /* unused warning box from the original page */
 </style>
 
 <!-- no settings overlay -->
