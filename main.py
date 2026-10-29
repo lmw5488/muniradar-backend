@@ -327,14 +327,19 @@ def format_openfigi_data(figi: dict, cusip: str) -> str:
 
 # ── Web enrichment helpers ────────────────────────────────────────────────────
 
-async def brave_search(client: httpx.AsyncClient, query: str, count: int = 5) -> list[dict]:
+async def brave_search(client: httpx.AsyncClient, query: str, count: int = 5,
+                       freshness: Optional[str] = None) -> list[dict]:
+    """Brave web search. freshness='py' limits results to the past year."""
     if not BRAVE_API_KEY:
         return []
+    params = {"q": query, "count": count, "text_decorations": False, "extra_snippets": True}
+    if freshness:
+        params["freshness"] = freshness
     try:
         resp = await client.get(
             "https://api.search.brave.com/res/v1/web/search",
             headers={"Accept": "application/json", "X-Subscription-Token": BRAVE_API_KEY},
-            params={"q": query, "count": count, "text_decorations": False},
+            params=params,
             timeout=10.0,
         )
         if resp.status_code != 200:
@@ -346,10 +351,51 @@ async def brave_search(client: httpx.AsyncClient, query: str, count: int = 5) ->
                 "title":   r.get("title", ""),
                 "url":     r.get("url", ""),
                 "snippet": r.get("description", ""),
+                "extra":   r.get("extra_snippets", []) or [],
+                "date":    r.get("page_age", "") or r.get("age", ""),
             })
         return results
     except Exception:
         return []
+
+
+# Bloomberg/OpenFIGI names are abbreviated ("DALLAS-FORT WORTH TX INTL ARPT").
+# News articles use plain English, so expand common abbreviations before searching.
+_ABBREV = {
+    "ARPT": "Airport", "INTL": "International", "AUTH": "Authority", "AGY": "Agency",
+    "DEV": "Development", "FIN": "Finance", "FING": "Financing", "HSG": "Housing",
+    "UNIV": "University", "SCH": "School", "DIST": "District", "CNTY": "County",
+    "CO": "County", "TWP": "Township", "WTR": "Water", "SWR": "Sewer", "PWR": "Power",
+    "ELEC": "Electric", "UTIL": "Utility", "UTILS": "Utilities", "TRANSN": "Transportation",
+    "TRAN": "Transit", "TPK": "Turnpike", "HOSP": "Hospital", "MED": "Medical", "CTR": "Center",
+    "HLTH": "Health", "FACS": "Facilities", "FAC": "Facility", "DORM": "Dormitory",
+    "COMWLTH": "Commonwealth", "MUN": "Municipal", "MUNI": "Municipal", "IMPT": "Improvement",
+    "REDEV": "Redevelopment", "INDL": "Industrial", "ENVIRONMENTAL": "Environmental",
+    "SVCS": "Services", "SYS": "System", "REGL": "Regional", "MET": "Metropolitan",
+    "METRO": "Metropolitan", "PUB": "Public", "PK": "Park", "PKG": "Parking",
+    "ST": "State", "DEPT": "Department", "CMNTY": "Community", "COLL": "College", "INDPT": "Independent", "ISD": "Independent School District",
+    "USD": "Unified School District", "GO": "", "REV": "", "BDS": "", "REF": "", "SER": "",
+}
+
+
+_US_STATES = set("AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA PR RI SC SD TN TX UT VT VA WA WV WI WY".split())
+
+
+def plain_issuer_name(name: str) -> str:
+    """'DALLAS-FORT WORTH TX INTL ARPT' -> 'Dallas-Fort Worth TX International Airport'."""
+    words = []
+    for w in re.split(r"\s+", (name or "").strip()):
+        key = w.upper().strip(",.")
+        if key in ("OF", "AND", "&", "THE", "FOR"):
+            words.append(key.lower() if key != "&" else "&")
+        elif key in _ABBREV:
+            if _ABBREV[key]:
+                words.append(_ABBREV[key])
+        elif key in _US_STATES:
+            words.append(key)                      # state code, keep as-is
+        else:
+            words.append(w.title())
+    return " ".join(words).strip()
 
 
 async def emma_trade_data(client: httpx.AsyncClient, cusip: str) -> str:
@@ -383,10 +429,16 @@ def format_search_results(results: list[dict], label: str) -> str:
     if not results:
         return ""
     lines = [f"{label}:"]
+    seen = set()
     for r in results:
-        lines.append(f"  • {r['title']}")
-        if r["snippet"]:
-            lines.append(f"    {r['snippet'][:200]}")
+        if r["url"] in seen:
+            continue
+        seen.add(r["url"])
+        dated = f" [{r['date'][:10]}]" if r.get("date") else ""
+        lines.append(f"  • {r['title']}{dated}")
+        text = " ".join([r["snippet"]] + list(r.get("extra") or [])).strip()
+        if text:
+            lines.append(f"    {text[:700]}")
         lines.append(f"    Source: {r['url']}")
     return "\n".join(lines)
 
@@ -395,14 +447,15 @@ async def gather_web_data(cusip: str, issuer_name: str, include_ratings_search: 
     """Run web enrichment in parallel, hard cap 14s."""
     async def _fetch_all():
         async with httpx.AsyncClient(timeout=httpx.Timeout(8.0, connect=4.0)) as client:
-            search_name   = issuer_name if issuer_name else cusip
-            ratings_query = f'"{search_name}" rating Moody\'s S&P Fitch municipal bond 2024 2025 2026'
-            news_query    = f'"{search_name}" municipal bond news 2025 2026'
-            credit_query  = f'"{search_name}" municipal credit financial audit 2024 2025'
+            search_name   = plain_issuer_name(issuer_name) if issuer_name else cusip
+            year          = datetime.now().year
+            ratings_query = f"{search_name} Moody's S&P Fitch rating outlook upgrade downgrade affirmed"
+            news_query    = f"{search_name} bonds news {year}"
+            credit_query  = f"{search_name} annual comprehensive financial report budget {year - 1} {year}"
             tasks = [
-                brave_search(client, ratings_query, count=4 if include_ratings_search else 3),
-                brave_search(client, news_query,    count=3),
-                brave_search(client, credit_query,  count=3),
+                brave_search(client, ratings_query, count=6 if include_ratings_search else 5, freshness="py"),
+                brave_search(client, news_query,    count=5, freshness="py"),
+                brave_search(client, credit_query,  count=4),
                 emma_trade_data(client, cusip),
             ]
             return await asyncio.gather(*tasks, return_exceptions=True)
@@ -422,8 +475,8 @@ async def gather_web_data(cusip: str, issuer_name: str, include_ratings_search: 
         sections.append(emma_trades)
 
     for block in [
-        format_search_results(ratings_results, "Recent web: rating actions & current ratings"),
-        format_search_results(news_results,    "Recent web: news & developments"),
+        format_search_results(ratings_results, "Recent web (past 12 months): rating actions & current ratings"),
+        format_search_results(news_results,    "Recent web (past 12 months): news & developments"),
         format_search_results(credit_results,  "Recent web: credit & financial"),
     ]:
         if block:
@@ -432,7 +485,10 @@ async def gather_web_data(cusip: str, issuer_name: str, include_ratings_search: 
     if not sections:
         return ""
 
-    return "\n\n## Live Web Data Retrieved at Request Time\n" + "\n\n".join(sections) + "\n"
+    today = datetime.now().strftime("%B %d, %Y")
+    return (f"\n\n## Live Web Data Retrieved at Request Time (today is {today})\n"
+            "Items are dated where the source provides a date. Newer information here OVERRIDES your training data.\n"
+            + "\n\n".join(sections) + "\n")
 
 
 # ── Issuer identity: Bloomberg -> OpenFIGI -> EMMA ───────────────────────────
