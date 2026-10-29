@@ -452,11 +452,13 @@ async def gather_web_data(cusip: str, issuer_name: str, include_ratings_search: 
             ratings_query = f"{search_name} Moody's S&P Fitch rating outlook upgrade downgrade affirmed"
             news_query    = f"{search_name} bonds news {year}"
             credit_query  = f"{search_name} annual comprehensive financial report budget {year - 1} {year}"
+            current_query = f"{search_name} bond ratings Moody's S&P Fitch investor relations"
             tasks = [
                 brave_search(client, ratings_query, count=6 if include_ratings_search else 5, freshness="py"),
                 brave_search(client, news_query,    count=5, freshness="py"),
                 brave_search(client, credit_query,  count=4),
                 emma_trade_data(client, cusip),
+                brave_search(client, current_query, count=5),
             ]
             return await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -465,8 +467,8 @@ async def gather_web_data(cusip: str, issuer_name: str, include_ratings_search: 
     except asyncio.TimeoutError:
         return ""
 
-    ratings_results, news_results, credit_results, emma_trades = [
-        r if not isinstance(r, Exception) else ([] if i < 3 else "")
+    ratings_results, news_results, credit_results, emma_trades, current_results = [
+        r if not isinstance(r, Exception) else ("" if i == 3 else [])
         for i, r in enumerate(results)
     ]
 
@@ -476,6 +478,7 @@ async def gather_web_data(cusip: str, issuer_name: str, include_ratings_search: 
 
     for block in [
         format_search_results(ratings_results, "Recent web (past 12 months): rating actions & current ratings"),
+        format_search_results(current_results, "Web (any date): current bond ratings references"),
         format_search_results(news_results,    "Recent web (past 12 months): news & developments"),
         format_search_results(credit_results,  "Recent web: credit & financial"),
     ]:
@@ -689,8 +692,8 @@ async def credit_intel(req: CreditIntelRequest):
     elif data_source == "openfigi":
         data_instructions = """Generate a complete credit intelligence card. The issuer above is verified by Bloomberg's OpenFIGI service — that is the entity to analyze. Expand Bloomberg's short name to the full official issuer name (e.g. 'NEW YORK CITY-D' -> 'City of New York'), but do not substitute a different entity. The Bloomberg Terminal was unavailable, so ratings must be sourced from the live web data provided below.
 1. Analyze ONLY the OpenFIGI-identified issuer — do not guess a different one
-2. For ratings: extract them from the live web data (rating agency search results) — be explicit about what you found vs what is uncertain
-3. If ratings are not found in web data, mark as NR and note web search was inconclusive
+2. For ratings: take them from the live web data. Use the MOST RECENT dated rating or rating action found for each agency (an outlook change or affirmation also confirms the current rating). Older sources are acceptable if nothing newer exists — put the source date in last_action (e.g. "Affirmed A1, outlook revised to positive — Mar 2026")
+3. Mark an agency NR only if no web source mentions that agency's rating at all, and note web search was inconclusive
 4. Revenue sources and security pledge — infer from security type and sector
 5. Recent developments — use live web data
 6. Investability is ISSUER-LEVEL: for each horizon (1, 5, 10, 15, 20 years), answer "is this issuer's credit safe to own out to that horizon?" based on its credit trajectory (finances, pensions, economy, structural balance, event risk). The same answer must apply to ANY CUSIP from this issuer — ignore this bond's own maturity, call date, coupon and price entirely
@@ -698,8 +701,8 @@ async def credit_intel(req: CreditIntelRequest):
     elif data_source == "emma":
         data_instructions = """Generate a complete credit intelligence card. The issuer name above is verified from EMMA — use it exactly. Bloomberg was unavailable so ratings must be sourced from the live web data provided below.
 1. Use ONLY the EMMA-verified issuer name — do not alter or guess it
-2. For ratings: extract them from the live web data (rating agency search results) — be explicit about what you found vs what is uncertain
-3. If ratings are not found in web data, mark as NR and note web search was inconclusive
+2. For ratings: take them from the live web data. Use the MOST RECENT dated rating or rating action found for each agency (an outlook change or affirmation also confirms the current rating). Older sources are acceptable if nothing newer exists — put the source date in last_action (e.g. "Affirmed A1, outlook revised to positive — Mar 2026")
+3. Mark an agency NR only if no web source mentions that agency's rating at all, and note web search was inconclusive
 4. Revenue sources and security pledge — infer from security type and sector
 5. Recent developments — use live web data
 6. Investability is ISSUER-LEVEL: for each horizon (1, 5, 10, 15, 20 years), answer "is this issuer's credit safe to own out to that horizon?" based on its credit trajectory (finances, pensions, economy, structural balance, event risk). The same answer must apply to ANY CUSIP from this issuer — ignore this bond's own maturity, call date, coupon and price entirely
