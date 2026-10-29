@@ -23,7 +23,7 @@ app.add_middleware(
 
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 BRAVE_API_KEY     = os.environ.get("BRAVE_API_KEY", "")
-DEFAULT_MODEL     = os.environ.get("DEFAULT_MODEL", "claude-sonnet-4-6")
+DEFAULT_MODEL     = os.environ.get("DEFAULT_MODEL", "claude-sonnet-5-5")
 DB_PATH           = os.environ.get("MUNIRADAR_DB", os.path.join(os.path.dirname(os.path.abspath(__file__)), "muniradar.db"))
 
 SYSTEM_PROMPT = """You are a senior municipal credit analyst at The Tribeca Group, a professional fixed income portfolio management team at Morgan Stanley. Your job is to produce rigorous, opinionated credit intelligence cards for muni bond CUSIPs. You have deep expertise in municipal credit structures, revenue pledge analysis, intercept mechanisms, sector benchmarks, and investability frameworks.
@@ -662,7 +662,7 @@ async def credit_intel(req: CreditIntelRequest):
 
 {data_instructions}"""
 
-    async with httpx.AsyncClient(timeout=90.0) as client:
+    async with httpx.AsyncClient(timeout=180.0) as client:
         response = await client.post(
             "https://api.anthropic.com/v1/messages",
             headers={
@@ -672,7 +672,7 @@ async def credit_intel(req: CreditIntelRequest):
             },
             json={
                 "model": model,
-                "max_tokens": 4000,
+                "max_tokens": 16000,   # room for the model's thinking + the full JSON card
                 "system": SYSTEM_PROMPT,
                 "messages": [{"role": "user", "content": user_message}],
             },
@@ -683,7 +683,8 @@ async def credit_intel(req: CreditIntelRequest):
         raise HTTPException(status_code=response.status_code, detail=err.get("message", "Anthropic API error"))
 
     data = response.json()
-    raw  = data["content"][0]["text"].strip()
+    # Newer models may return a "thinking" block before the answer — read only the text blocks
+    raw  = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text").strip()
 
     match = re.search(r'\{[\s\S]*\}', raw)
     if not match:
