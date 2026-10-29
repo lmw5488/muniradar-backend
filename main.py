@@ -58,18 +58,18 @@ Return ONLY valid JSON matching this exact schema — no preamble, no markdown, 
     "fitch": { "rating": "AAA | etc | NR", "outlook": "Stable | Positive | Negative | Watch | NR", "last_action": "Brief description" }
   },
   "investability": {
-    "1yr":  { "verdict": "INVESTABLE | CAUTIOUS | AVOID", "rationale": "One sentence rationale specific to this tenor" },
-    "5yr":  { "verdict": "INVESTABLE | CAUTIOUS | AVOID", "rationale": "One sentence rationale" },
-    "10yr": { "verdict": "INVESTABLE | CAUTIOUS | AVOID", "rationale": "One sentence rationale" },
-    "15yr": { "verdict": "INVESTABLE | CAUTIOUS | AVOID", "rationale": "One sentence rationale" },
-    "20yr": { "verdict": "INVESTABLE | CAUTIOUS | AVOID", "rationale": "One sentence rationale" }
+    "1yr":  { "verdict": "INVESTABLE | CAUTIOUS | AVOID", "rationale": "One sentence: is this ISSUER's credit safe to own for the next 1 year, and why" },
+    "5yr":  { "verdict": "INVESTABLE | CAUTIOUS | AVOID", "rationale": "One sentence: is this issuer's credit safe to own out to 5 years, and why" },
+    "10yr": { "verdict": "INVESTABLE | CAUTIOUS | AVOID", "rationale": "One sentence: is this issuer's credit safe to own out to 10 years, and why" },
+    "15yr": { "verdict": "INVESTABLE | CAUTIOUS | AVOID", "rationale": "One sentence: is this issuer's credit safe to own out to 15 years, and why" },
+    "20yr": { "verdict": "INVESTABLE | CAUTIOUS | AVOID", "rationale": "One sentence: is this issuer's credit safe to own out to 20 years, and why" }
   },
-  "overall_recommendation": "BUY | HOLD | REDUCE | AVOID",
-  "analyst_note": "2-3 sentence senior analyst take: the single most important thing to know about this credit right now, and what would change the view. Be direct and opinionated.",
+  "overall_recommendation": "BUY | HOLD | REDUCE | AVOID — the stance on the ISSUER's credit, applying to any of its CUSIPs",
+  "analyst_note": "2-3 sentence Tribeca AI Analyst take on the ISSUER's credit (not this specific bond): the single most important thing to know about this credit right now, and what would change the view. Be direct and opinionated.",
   "data_note": "Brief disclosure about data currency and sources used in this analysis — specify whether Bloomberg or EMMA was used for issuer identification, and how ratings were sourced"
 }
 
-Be specific to the actual issuer. Use real figures where known. Do not give generic muni boilerplate. If data is uncertain, say so in the notes fields rather than omitting or fabricating. Distinguish between bond types within an issuer (e.g. LADWP Power vs Water; LAUSD GO vs COPs). When live web data is provided in the prompt, prioritize it over your training data for recent developments."""
+This is ISSUER-LEVEL credit research: the same card is reused for every CUSIP from this issuer, so never let a single bond's maturity, call, coupon or price drive any judgment. Be specific to the actual issuer. Use real figures where known. Do not give generic muni boilerplate. If data is uncertain, say so in the notes fields rather than omitting or fabricating. Distinguish between bond types within an issuer (e.g. LADWP Power vs Water; LAUSD GO vs COPs). When live web data is provided in the prompt, prioritize it over your training data for recent developments."""
 
 
 # ── Bloomberg data fetch (synchronous, runs in thread pool) ──────────────────
@@ -628,7 +628,7 @@ async def credit_intel(req: CreditIntelRequest):
 3. Revenue sources and security pledge — infer from security type and sector
 4. Key financial metrics vs sector benchmarks (use Bloomberg DSCR/DCOH if provided)
 5. Recent developments — prioritize live web data for anything 2024 or later
-6. Investability by tenor — be granular
+6. Investability is ISSUER-LEVEL: for each horizon (1, 5, 10, 15, 20 years), answer "is this issuer's credit safe to own out to that horizon?" based on its credit trajectory (finances, pensions, economy, structural balance, event risk). The same answer must apply to ANY CUSIP from this issuer — ignore this bond's own maturity, call date, coupon and price entirely
 7. In data_note, confirm Bloomberg was primary source"""
     elif data_source == "openfigi":
         data_instructions = """Generate a complete credit intelligence card. The issuer above is verified by Bloomberg's OpenFIGI service — that is the entity to analyze. Expand Bloomberg's short name to the full official issuer name (e.g. 'NEW YORK CITY-D' -> 'City of New York'), but do not substitute a different entity. The Bloomberg Terminal was unavailable, so ratings must be sourced from the live web data provided below.
@@ -637,7 +637,7 @@ async def credit_intel(req: CreditIntelRequest):
 3. If ratings are not found in web data, mark as NR and note web search was inconclusive
 4. Revenue sources and security pledge — infer from security type and sector
 5. Recent developments — use live web data
-6. Investability by tenor — be granular
+6. Investability is ISSUER-LEVEL: for each horizon (1, 5, 10, 15, 20 years), answer "is this issuer's credit safe to own out to that horizon?" based on its credit trajectory (finances, pensions, economy, structural balance, event risk). The same answer must apply to ANY CUSIP from this issuer — ignore this bond's own maturity, call date, coupon and price entirely
 7. In data_note, note that the issuer was verified via Bloomberg OpenFIGI and ratings sourced from web search"""
     elif data_source == "emma":
         data_instructions = """Generate a complete credit intelligence card. The issuer name above is verified from EMMA — use it exactly. Bloomberg was unavailable so ratings must be sourced from the live web data provided below.
@@ -646,7 +646,7 @@ async def credit_intel(req: CreditIntelRequest):
 3. If ratings are not found in web data, mark as NR and note web search was inconclusive
 4. Revenue sources and security pledge — infer from security type and sector
 5. Recent developments — use live web data
-6. Investability by tenor — be granular
+6. Investability is ISSUER-LEVEL: for each horizon (1, 5, 10, 15, 20 years), answer "is this issuer's credit safe to own out to that horizon?" based on its credit trajectory (finances, pensions, economy, structural balance, event risk). The same answer must apply to ANY CUSIP from this issuer — ignore this bond's own maturity, call date, coupon and price entirely
 7. In data_note, note that issuer was verified via EMMA and ratings sourced from web search"""
     else:
         data_instructions = """WARNING: No verified issuer data was available from Bloomberg or EMMA. Do NOT guess the issuer from the CUSIP digits.

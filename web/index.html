@@ -898,7 +898,7 @@ function renderCard(d, cusip) {
     <!-- INVESTABILITY GRID -->
     <div class="section-card">
       <div class="section-title" style="justify-content:space-between;align-items:center;">
-        <span>Investability by Maturity Tier</span>
+        <span>Issuer Credit Investability by Horizon</span>
         <span style="font-size:12px;font-weight:600;letter-spacing:0.04em;color:${recColor};text-transform:none;">
           Overall: ${d.overall_recommendation || '—'}
         </span>
@@ -920,7 +920,7 @@ function renderCard(d, cusip) {
 
     <!-- ANALYST NOTE -->
     <div class="analyst-card">
-      <div class="analyst-label">Senior Analyst Perspective</div>
+      <div class="analyst-label">Tribeca AI Analyst Perspective</div>
       <div class="analyst-text">${d.analyst_note || ''}</div>
       <div class="analyst-rec">Overall recommendation: <strong style="color:${recColor}">${d.overall_recommendation || '—'}</strong></div>
     </div>
