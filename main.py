@@ -64,7 +64,7 @@ Return ONLY valid JSON matching this exact schema — no preamble, no markdown, 
     "15yr": { "verdict": "INVESTABLE | CAUTIOUS | AVOID", "rationale": "One sentence: is this issuer's credit safe to own out to 15 years, and why" },
     "20yr": { "verdict": "INVESTABLE | CAUTIOUS | AVOID", "rationale": "One sentence: is this issuer's credit safe to own out to 20 years, and why" }
   },
-  "overall_recommendation": "BUY | HOLD | REDUCE | AVOID — the stance on the ISSUER's credit, applying to any of its CUSIPs",
+  "overall_recommendation": "ONE WORD ONLY: BUY | HOLD | REDUCE | AVOID (the stance on the issuer's credit)",
   "analyst_note": "2-3 sentence Tribeca AI Analyst take on the ISSUER's credit (not this specific bond): the single most important thing to know about this credit right now, and what would change the view. Be direct and opinionated.",
   "data_note": "Brief disclosure about data currency and sources used in this analysis — specify whether Bloomberg or EMMA was used for issuer identification, and how ratings were sourced"
 }
@@ -336,12 +336,17 @@ async def brave_search(client: httpx.AsyncClient, query: str, count: int = 5,
     if freshness:
         params["freshness"] = freshness
     try:
-        resp = await client.get(
-            "https://api.search.brave.com/res/v1/web/search",
-            headers={"Accept": "application/json", "X-Subscription-Token": BRAVE_API_KEY},
-            params=params,
-            timeout=10.0,
-        )
+        # Brave's free plan allows ~1 search/second: retry when rate-limited (429)
+        for attempt in range(8):
+            resp = await client.get(
+                "https://api.search.brave.com/res/v1/web/search",
+                headers={"Accept": "application/json", "X-Subscription-Token": BRAVE_API_KEY},
+                params=params,
+                timeout=10.0,
+            )
+            if resp.status_code != 429:
+                break
+            await asyncio.sleep(1.1 + 0.4 * attempt)
         if resp.status_code != 200:
             return []
         data = resp.json()
@@ -444,7 +449,7 @@ def format_search_results(results: list[dict], label: str) -> str:
 
 
 async def gather_web_data(cusip: str, issuer_name: str, include_ratings_search: bool = False) -> str:
-    """Run web enrichment in parallel, hard cap 14s."""
+    """Run web enrichment in parallel, hard cap 25s (allows for rate-limit retries)."""
     async def _fetch_all():
         async with httpx.AsyncClient(timeout=httpx.Timeout(8.0, connect=4.0)) as client:
             search_name   = plain_issuer_name(issuer_name) if issuer_name else cusip
@@ -452,22 +457,27 @@ async def gather_web_data(cusip: str, issuer_name: str, include_ratings_search: 
             ratings_query = f"{search_name} Moody's S&P Fitch rating outlook upgrade downgrade affirmed"
             news_query    = f"{search_name} bonds news {year}"
             credit_query  = f"{search_name} annual comprehensive financial report budget {year - 1} {year}"
-            current_query = f"{search_name} bond ratings Moody's S&P Fitch investor relations"
+            # One search per agency (any date), so one agency's pages can't crowd out the others
+            moodys_query  = f"{search_name} Moody's rating outlook"
+            sp_query      = f"{search_name} S&P Global Ratings rating outlook"
+            fitch_query   = f"{search_name} Fitch Ratings rating outlook"
             tasks = [
                 brave_search(client, ratings_query, count=6 if include_ratings_search else 5, freshness="py"),
                 brave_search(client, news_query,    count=5, freshness="py"),
                 brave_search(client, credit_query,  count=4),
                 emma_trade_data(client, cusip),
-                brave_search(client, current_query, count=5),
+                brave_search(client, moodys_query,  count=4),
+                brave_search(client, sp_query,      count=4),
+                brave_search(client, fitch_query,   count=4),
             ]
             return await asyncio.gather(*tasks, return_exceptions=True)
 
     try:
-        results = await asyncio.wait_for(_fetch_all(), timeout=14.0)
+        results = await asyncio.wait_for(_fetch_all(), timeout=25.0)
     except asyncio.TimeoutError:
         return ""
 
-    ratings_results, news_results, credit_results, emma_trades, current_results = [
+    ratings_results, news_results, credit_results, emma_trades, moodys_results, sp_results, fitch_results = [
         r if not isinstance(r, Exception) else ("" if i == 3 else [])
         for i, r in enumerate(results)
     ]
@@ -478,7 +488,9 @@ async def gather_web_data(cusip: str, issuer_name: str, include_ratings_search: 
 
     for block in [
         format_search_results(ratings_results, "Recent web (past 12 months): rating actions & current ratings"),
-        format_search_results(current_results, "Web (any date): current bond ratings references"),
+        format_search_results(moodys_results,  "Web (any date): Moody's rating references"),
+        format_search_results(sp_results,      "Web (any date): S&P rating references"),
+        format_search_results(fitch_results,   "Web (any date): Fitch rating references"),
         format_search_results(news_results,    "Recent web (past 12 months): news & developments"),
         format_search_results(credit_results,  "Recent web: credit & financial"),
     ]:
@@ -579,6 +591,12 @@ def init_db():
 
 
 init_db()
+
+
+def normalize_rec(rec) -> str:
+    """Keep just BUY / HOLD / REDUCE / AVOID even if the model wrote a sentence."""
+    m = re.search(r"\b(BUY|HOLD|REDUCE|AVOID)\b", str(rec or "").upper())
+    return m.group(1) if m else ""
 
 
 def issuer_key(name: str) -> str:
@@ -754,6 +772,8 @@ async def credit_intel(req: CreditIntelRequest):
     except json.JSONDecodeError as e:
         raise HTTPException(status_code=500, detail=f"JSON parse error: {e}")
 
+    intel["overall_recommendation"] = normalize_rec(intel.get("overall_recommendation")) or intel.get("overall_recommendation")
+
     # ── Save to the issuer library (replaces any older report for this issuer) ──
     if data_source != "none":
         try:
@@ -798,7 +818,7 @@ def list_issuers():
             "id": r["id"], "name": r["name"], "state": r["state"], "sector": r["sector"],
             "saved_at": r["saved_at"],
             "cusips": r["cusips"].split(",") if r["cusips"] else [],
-            "recommendation": rep.get("overall_recommendation"),
+            "recommendation": normalize_rec(rep.get("overall_recommendation")),
         })
     return out
 

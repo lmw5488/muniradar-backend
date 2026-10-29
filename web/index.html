@@ -533,7 +533,7 @@ body {
 .library-item-main { flex: 1; min-width: 0; }
 .library-item-name { font-size: 13px; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .library-item-meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
-.library-rec { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; flex-shrink: 0; }
+.library-rec { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; flex-shrink: 0; white-space: nowrap; }
 .library-del { background: transparent; border: none; color: var(--text-dim); cursor: pointer; font-size: 16px; line-height: 1; padding: 4px 6px; border-radius: 4px; flex-shrink: 0; }
 .library-del:hover { color: var(--red); background: var(--red-bg); }
 .library-empty { color: var(--text-muted); font-size: 13px; text-align: center; padding: 40px 12px; }
@@ -590,11 +590,6 @@ body {
     <span class="tab-badge">Credit Intel</span>
     <button class="btn-icon" onclick="openLibrary()" title="Issuer library" aria-label="Issuer library">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-    </button>
-    <button class="btn-icon" onclick="openSettings()" title="Settings">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-      </svg>
     </button>
   </div>
 </header>
@@ -762,6 +757,7 @@ async function runIntel(forceNew) {
 
 // ─── RENDER ───
 function renderCard(d, cusip) {
+  d.overall_recommendation = normRec(d.overall_recommendation) || d.overall_recommendation;
   const i = d.issuer || {};
   const r = d.ratings || {};
   const inv = d.investability || {};
@@ -942,6 +938,8 @@ function fmtDate(iso) {
   const d = new Date(iso);
   return isNaN(d) ? iso : d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
 }
+// Keep just BUY / HOLD / REDUCE / AVOID even if a saved report has a sentence there
+function normRec(r) { const m = String(r || '').toUpperCase().match(/\b(BUY|HOLD|REDUCE|AVOID)\b/); return m ? m[1] : ''; }
 function recColorOf(r) { return ({ BUY: 'var(--green)', HOLD: 'var(--amber)', REDUCE: 'var(--red)', AVOID: 'var(--red)' }[r] || 'var(--text-muted)'); }
 
 async function libraryFetch(path, opts = {}) {
@@ -1024,7 +1022,7 @@ function renderLibrary() {
         <div class="library-item-name">${escHtml(x.name || 'Unknown issuer')}</div>
         <div class="library-item-meta">${escHtml([x.state, x.sector].filter(Boolean).join(' · '))} · ${escHtml(fmtDate(x.saved_at))} · ${(x.cusips || []).length} CUSIP${(x.cusips || []).length === 1 ? '' : 's'}</div>
       </div>
-      <span class="library-rec" style="color:${recColorOf(x.recommendation)}">${escHtml(x.recommendation || '')}</span>
+      <span class="library-rec" style="color:${recColorOf(normRec(x.recommendation))}">${escHtml(normRec(x.recommendation))}</span>
       <button class="library-del" title="Remove from library" aria-label="Remove" onclick="event.stopPropagation(); deleteIssuer(${x.id})">×</button>
     </div>`).join('');
 }
