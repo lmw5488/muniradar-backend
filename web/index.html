@@ -354,9 +354,9 @@ body {
 .section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
 
 /* Revenue sources */
-.rev-item { display: flex; align-items: baseline; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border-dim); }
+.rev-item { display: grid; grid-template-columns: 96px minmax(0, 1fr); align-items: start; gap: 4px 12px; padding: 8px 0; border-bottom: 1px solid var(--border-dim); }
 .rev-item:last-child { border-bottom: none; }
-.rev-share { font-family: 'IBM Plex Mono', monospace; font-size: 14px; font-weight: 500; color: var(--gold); min-width: 44px; }
+.rev-share { font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 500; line-height: 1.35; color: var(--gold); overflow-wrap: anywhere; }
 .rev-source { font-size: 13px; color: var(--text); flex: 1; }
 .rev-note { font-size: 11px; color: var(--text-muted); }
 
