@@ -1,28 +1,12 @@
-"""
-MuniRadar — local backend (runs on the Mac with Bloomberg)
-==========================================================
-  GET    /  or /api/health    status (the page itself is on Netlify)
-  POST   /api/lookup          Bloomberg issuer lookup + "is there a saved report?"
-  POST   /api/report          build a new report (streams sections as they finish)
-  GET    /api/issuers         saved issuer library
-  GET    /api/issuers/{id}    one saved issuer report
-  DELETE /api/issuers/{id}    remove a saved issuer
-"""
-
 import os
-import re
 import json
-import time
+import re
 import asyncio
-import sqlite3
-from datetime import datetime, timezone
-from typing import Optional
-
 import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from typing import Optional
 
 app = FastAPI(title="MuniRadar Credit Intel API")
 
@@ -37,33 +21,81 @@ app.add_middleware(
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 BRAVE_API_KEY     = os.environ.get("BRAVE_API_KEY", "")
 DEFAULT_MODEL     = os.environ.get("DEFAULT_MODEL", "claude-sonnet-4-6")
-BASE_DIR          = os.path.dirname(os.path.abspath(__file__))
-DB_PATH           = os.environ.get("MUNIRADAR_DB", os.path.join(BASE_DIR, "muniradar.db"))
 
+SYSTEM_PROMPT = """You are a senior municipal credit analyst at The Tribeca Group, a professional fixed income portfolio management team at Morgan Stanley. Your job is to produce rigorous, opinionated credit intelligence cards for muni bond CUSIPs. You have deep expertise in municipal credit structures, revenue pledge analysis, intercept mechanisms, sector benchmarks, and investability frameworks.
 
-def now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+CRITICAL RULE — NEVER GUESS THE ISSUER OR RATINGS: All issuer identity data is provided from verified sources (Bloomberg or EMMA) in the ## Verified Bond Data section. Use ONLY that data for issuer name. For ratings, use Bloomberg data if provided; otherwise use ratings found in live web data. Do NOT invent or guess issuer names or ratings. If ratings are not confirmed, mark them NR and note the source uncertainty.
+
+Return ONLY valid JSON matching this exact schema — no preamble, no markdown, no explanation:
+{
+  "issuer": {
+    "name": "Full official issuer name",
+    "sector": "GO | Water & Sewer | Electric | School District | Transportation | Healthcare | Higher Ed | Housing | Special Tax | Airport | Other",
+    "bond_type": "General Obligation | Revenue | COP/Lease | Special Assessment | Other",
+    "state": "Two-letter state code",
+    "service_area": "Geographic area served / jurisdiction description",
+    "description": "2-3 sentence description of what this entity is, what it does, and its credit profile at a high level"
+  },
+  "revenue_sources": [
+    { "source": "Revenue source name", "share": "~XX% (or qualitative)", "notes": "Brief note on stability/pledging" }
+  ],
+  "security_pledge": "Describe the legal pledge securing these bonds — property tax levy, net revenues, rate covenant, state intercept, etc. Be specific about priority.",
+  "key_metrics": [
+    { "metric": "Metric name", "value": "Reported value with units", "vs_median": "above | below | in-line", "notes": "Context vs sector median" }
+  ],
+  "strengths": ["Strength 1 — specific, factual", "Strength 2", "Strength 3"],
+  "risks": ["Risk 1 — specific, factual", "Risk 2", "Risk 3"],
+  "recent_developments": [
+    { "date": "Mon YYYY", "headline": "Short factual headline", "impact": "positive | negative | neutral", "detail": "1-2 sentences with specifics" }
+  ],
+  "ratings": {
+    "moodys": { "rating": "Aa1 | etc | NR", "outlook": "Stable | Positive | Negative | Watch | NR", "last_action": "Brief description of last rating action" },
+    "sp": { "rating": "AAA | etc | NR", "outlook": "Stable | Positive | Negative | CreditWatch | NR", "last_action": "Brief description" },
+    "fitch": { "rating": "AAA | etc | NR", "outlook": "Stable | Positive | Negative | Watch | NR", "last_action": "Brief description" }
+  },
+  "investability": {
+    "1yr":  { "verdict": "INVESTABLE | CAUTIOUS | AVOID", "rationale": "One sentence rationale specific to this tenor" },
+    "5yr":  { "verdict": "INVESTABLE | CAUTIOUS | AVOID", "rationale": "One sentence rationale" },
+    "10yr": { "verdict": "INVESTABLE | CAUTIOUS | AVOID", "rationale": "One sentence rationale" },
+    "15yr": { "verdict": "INVESTABLE | CAUTIOUS | AVOID", "rationale": "One sentence rationale" },
+    "20yr": { "verdict": "INVESTABLE | CAUTIOUS | AVOID", "rationale": "One sentence rationale" }
+  },
+  "overall_recommendation": "BUY | HOLD | REDUCE | AVOID",
+  "analyst_note": "2-3 sentence senior analyst take: the single most important thing to know about this credit right now, and what would change the view. Be direct and opinionated.",
+  "data_note": "Brief disclosure about data currency and sources used in this analysis — specify whether Bloomberg or EMMA was used for issuer identification, and how ratings were sourced"
+}
+
+Be specific to the actual issuer. Use real figures where known. Do not give generic muni boilerplate. If data is uncertain, say so in the notes fields rather than omitting or fabricating. Distinguish between bond types within an issuer (e.g. LADWP Power vs Water; LAUSD GO vs COPs). When live web data is provided in the prompt, prioritize it over your training data for recent developments."""
 
 
 # ── Bloomberg data fetch (synchronous, runs in thread pool) ──────────────────
-# Credit-relevant fields only. No price / yield / coupon / maturity: this is an
-# issuer-level credit tool, and market data stays on the terminal.
-# ULT_BORROWER* = the actual borrower on conduit deals (Bloomberg ignores
-# whichever spelling it doesn't recognize).
 
 BLP_FIELDS = [
     "ISSUER",
-    "ULT_BORROWER",
-    "ULT_BORROWER_NAME",
     "SECURITY_DES",
     "RTG_MOODY",
     "RTG_SP",
     "RTG_FITCH",
+    "MOODY_OUTLOOK",
+    "SP_OUTLOOK",
+    "FITCH_OUTLOOK",
+    "RTG_MDY_WATCH",
+    "RTG_SP_WATCH",
+    "NXT_CALL_DT",
+    "NXT_CALL_PX",
+    "MATURITY",
+    "CPN",
+    "YLD_YTM_MID",
+    "PX_MID",
+    "Z_SPRD_MID",
+    "OAS_SPREAD_MID",
     "TAX_STATUS",
     "STATE_CODE",
     "COLLAT_TYP",
     "ISSUE_DT",
     "AMT_OUTSTANDING",
+    "DEBT_SERVICE_COVERAGE",
+    "DAYS_CASH_ON_HAND",
 ]
 
 def _fetch_bloomberg_sync(cusip: str) -> dict:
@@ -124,167 +156,114 @@ async def fetch_bloomberg(cusip: str) -> dict:
     return await loop.run_in_executor(None, _fetch_bloomberg_sync, cusip)
 
 
-async def get_bloomberg(cusip: str) -> dict:
-    """Bloomberg fetch with friendly errors. Required — no fallback."""
-    try:
-        data = await asyncio.wait_for(fetch_bloomberg(cusip), timeout=10.0)
-    except asyncio.TimeoutError:
-        raise HTTPException(status_code=503,
-                            detail="Bloomberg timed out. Ensure the Bloomberg Terminal is running and signed in.")
-    except RuntimeError as e:
-        raise HTTPException(status_code=503, detail=str(e))
-    if not data:
-        raise HTTPException(status_code=404,
-                            detail=f"Bloomberg returned no data for CUSIP {cusip}. Verify the CUSIP is correct.")
-    return data
-
-
-def borrower_name(bbg: dict) -> str:
-    return bbg.get("ULT_BORROWER") or bbg.get("ULT_BORROWER_NAME") or ""
-
-
-BBG_LABELS = {
-    "ISSUER": "Issuer name",
-    "ULT_BORROWER": "Ultimate borrower / obligor",
-    "ULT_BORROWER_NAME": "Ultimate borrower / obligor",
-    "SECURITY_DES": "Security description",
-    "RTG_MOODY": "Moody's rating",
-    "RTG_SP": "S&P rating",
-    "RTG_FITCH": "Fitch rating",
-    "TAX_STATUS": "Tax status",
-    "STATE_CODE": "State",
-    "COLLAT_TYP": "Collateral / security type",
-    "ISSUE_DT": "Issue date",
-    "AMT_OUTSTANDING": "Amount outstanding",
-}
-
-
 def format_bloomberg_data(data: dict) -> str:
     """Format Bloomberg fields into a prompt section."""
     if not data:
         return ""
-    lines = ["## Bloomberg Data (verified — ground truth for issuer identity and current ratings)"]
-    for field, label in BBG_LABELS.items():
+    lines = ["## Verified Bond Data — Bloomberg (use as ground truth for issuer and ratings)"]
+    label_map = {
+        "ISSUER":               "Issuer name",
+        "SECURITY_DES":         "Security description",
+        "RTG_MOODY":            "Moody's rating",
+        "RTG_SP":               "S&P rating",
+        "RTG_FITCH":            "Fitch rating",
+        "MOODY_OUTLOOK":        "Moody's outlook",
+        "SP_OUTLOOK":           "S&P outlook",
+        "FITCH_OUTLOOK":        "Fitch outlook",
+        "RTG_MDY_WATCH":        "Moody's watch status",
+        "RTG_SP_WATCH":         "S&P watch status",
+        "NXT_CALL_DT":          "Next call date",
+        "NXT_CALL_PX":          "Next call price",
+        "MATURITY":             "Maturity date",
+        "CPN":                  "Coupon",
+        "YLD_YTM_MID":          "Yield to maturity (mid)",
+        "PX_MID":               "Price (mid)",
+        "Z_SPRD_MID":           "Z-spread (mid)",
+        "OAS_SPREAD_MID":       "OAS spread (mid)",
+        "TAX_STATUS":           "Tax status",
+        "STATE_CODE":           "State",
+        "COLLAT_TYP":           "Collateral / security type",
+        "ISSUE_DT":             "Issue date",
+        "AMT_OUTSTANDING":      "Amount outstanding",
+        "DEBT_SERVICE_COVERAGE":"Debt service coverage ratio",
+        "DAYS_CASH_ON_HAND":    "Days cash on hand",
+    }
+    for field, label in label_map.items():
         if field in data:
             lines.append(f"  {label}: {data[field]}")
     return "\n".join(lines)
 
 
-# Short-lived cache so "Pull new" right after a lookup doesn't hit Bloomberg twice
-_BBG_CACHE: dict = {}
+# ── EMMA fallback — issuer name lookup ───────────────────────────────────────
 
-async def get_bloomberg_cached(cusip: str) -> dict:
-    hit = _BBG_CACHE.get(cusip)
-    if hit and time.time() - hit[0] < 600:
-        return hit[1]
-    data = await get_bloomberg(cusip)
-    _BBG_CACHE[cusip] = (time.time(), data)
-    return data
-
-
-# ── Issuer library (SQLite) — one saved report per issuer ────────────────────
-
-def db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-
-def init_db():
-    with db() as conn:
-        conn.executescript("""
-            CREATE TABLE IF NOT EXISTS issuers (
-                id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                issuer_key  TEXT UNIQUE,
-                name        TEXT,
-                state       TEXT,
-                sector      TEXT,
-                report_json TEXT NOT NULL,
-                bbg_json    TEXT,
-                seconds     REAL,
-                saved_at    TEXT NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS issuer_cusips (
-                cusip      TEXT PRIMARY KEY,
-                issuer_id  INTEGER NOT NULL,
-                added_at   TEXT NOT NULL
-            );
-        """)
+async def emma_issuer_lookup(client: httpx.AsyncClient, cusip: str) -> str:
+    """Try to get verified issuer name from EMMA bond detail."""
+    try:
+        url = f"https://emma.msrb.org/api/SecuritiesSearch/GetBondDetail?cusip={cusip}"
+        resp = await client.get(url, timeout=10.0, follow_redirects=True)
+        if resp.status_code != 200:
+            return ""
+        data = resp.json()
+        # Try common EMMA response fields for issuer name
+        for key in ("IssuerName", "issuerName", "Issuer", "issuer", "ObligorName", "obligorName"):
+            val = data.get(key, "")
+            if val and isinstance(val, str) and len(val) > 3:
+                return val.strip()
+        # Try nested structures
+        bond = data.get("BondDetail") or data.get("bondDetail") or data
+        if isinstance(bond, dict):
+            for key in ("IssuerName", "issuerName", "Issuer", "issuer"):
+                val = bond.get(key, "")
+                if val and isinstance(val, str) and len(val) > 3:
+                    return val.strip()
+        return ""
+    except Exception:
+        return ""
 
 
-init_db()
+async def emma_security_search(client: httpx.AsyncClient, cusip: str) -> str:
+    """Secondary EMMA endpoint for issuer name."""
+    try:
+        url = f"https://emma.msrb.org/api/SecuritiesSearch/GetSecurityDetails?cusip={cusip}"
+        resp = await client.get(url, timeout=10.0, follow_redirects=True)
+        if resp.status_code != 200:
+            return ""
+        data = resp.json()
+        for key in ("IssuerName", "issuerName", "ObligorName", "obligorName", "Issuer", "issuer"):
+            val = data.get(key, "")
+            if val and isinstance(val, str) and len(val) > 3:
+                return val.strip()
+        return ""
+    except Exception:
+        return ""
 
 
-def norm(s: str) -> str:
-    return re.sub(r"[^A-Z0-9]", "", (s or "").upper())
+async def get_issuer_from_emma(cusip: str) -> str:
+    """Try multiple EMMA endpoints to get verified issuer name."""
+    async with httpx.AsyncClient(timeout=12.0) as client:
+        results = await asyncio.gather(
+            emma_issuer_lookup(client, cusip),
+            emma_security_search(client, cusip),
+            return_exceptions=True,
+        )
+        for r in results:
+            if isinstance(r, str) and r:
+                return r
+    return ""
 
 
-def issuer_key(bbg: dict) -> str:
-    """Borrower on conduit deals, otherwise Bloomberg ISSUER."""
-    return norm(borrower_name(bbg) or bbg.get("ISSUER", ""))
+def format_emma_data(issuer_name: str, cusip: str) -> str:
+    """Format EMMA-sourced issuer data as a prompt section."""
+    lines = ["## Verified Bond Data — EMMA (issuer name verified; ratings from web search)"]
+    lines.append(f"  Issuer name: {issuer_name}")
+    lines.append(f"  CUSIP: {cusip}")
+    lines.append("  Note: Bloomberg unavailable. Ratings sourced from live web data below — treat as indicative.")
+    return "\n".join(lines)
 
 
-def find_issuer_by_cusip(conn, cusip: str) -> Optional[int]:
-    row = conn.execute("SELECT issuer_id FROM issuer_cusips WHERE cusip = ?", (cusip,)).fetchone()
-    return row["issuer_id"] if row else None
+# ── Web enrichment helpers ────────────────────────────────────────────────────
 
-
-def find_issuer_by_key(conn, key: str) -> Optional[int]:
-    if not key:
-        return None
-    row = conn.execute("SELECT id FROM issuers WHERE issuer_key = ?", (key,)).fetchone()
-    return row["id"] if row else None
-
-
-def link_cusip(conn, issuer_id: int, cusip: str):
-    conn.execute(
-        "INSERT INTO issuer_cusips (cusip, issuer_id, added_at) VALUES (?,?,?) "
-        "ON CONFLICT(cusip) DO UPDATE SET issuer_id = excluded.issuer_id",
-        (cusip, issuer_id, now_iso()),
-    )
-
-
-def issuer_payload(conn, issuer_id: int) -> Optional[dict]:
-    r = conn.execute("SELECT * FROM issuers WHERE id = ?", (issuer_id,)).fetchone()
-    if not r:
-        return None
-    cusips = [x["cusip"] for x in conn.execute(
-        "SELECT cusip FROM issuer_cusips WHERE issuer_id = ? ORDER BY added_at, cusip", (issuer_id,))]
-    return {
-        "issuer_id": r["id"],
-        "name": r["name"],
-        "saved_at": r["saved_at"],
-        "seconds": r["seconds"],
-        "report": json.loads(r["report_json"]),
-        "bbg": json.loads(r["bbg_json"] or "{}"),
-        "cusips": cusips,
-    }
-
-
-def save_report(cusip: str, bbg: dict, report: dict, seconds: float) -> dict:
-    """Save as the issuer's report, replacing any older one (no version history)."""
-    iss  = report.get("issuer") or {}
-    name = iss.get("name") or borrower_name(bbg) or bbg.get("ISSUER") or cusip
-    key  = issuer_key(bbg) or norm(name)
-    ts   = now_iso()
-    vals = (name, iss.get("state") or bbg.get("STATE_CODE"), iss.get("sector"),
-            json.dumps(report), json.dumps(bbg), round(seconds, 1), ts)
-    with db() as conn:
-        iid = find_issuer_by_cusip(conn, cusip) or find_issuer_by_key(conn, key)
-        if iid:
-            conn.execute("UPDATE issuers SET name=?, state=?, sector=?, report_json=?, bbg_json=?, seconds=?, saved_at=? "
-                         "WHERE id=?", vals + (iid,))
-        else:
-            cur = conn.execute("INSERT INTO issuers (name, state, sector, report_json, bbg_json, seconds, saved_at, issuer_key) "
-                               "VALUES (?,?,?,?,?,?,?,?)", vals + (key,))
-            iid = cur.lastrowid
-        link_cusip(conn, iid, cusip)
-        return issuer_payload(conn, iid)
-
-
-# ── Web enrichment ────────────────────────────────────────────────────────────
-
-async def brave_search(client: httpx.AsyncClient, query: str, count: int = 4) -> list:
+async def brave_search(client: httpx.AsyncClient, query: str, count: int = 5) -> list[dict]:
     if not BRAVE_API_KEY:
         return []
     try:
@@ -292,343 +271,230 @@ async def brave_search(client: httpx.AsyncClient, query: str, count: int = 4) ->
             "https://api.search.brave.com/res/v1/web/search",
             headers={"Accept": "application/json", "X-Subscription-Token": BRAVE_API_KEY},
             params={"q": query, "count": count, "text_decorations": False},
-            timeout=8.0,
+            timeout=10.0,
         )
         if resp.status_code != 200:
             return []
-        return [{"title": r.get("title", ""), "url": r.get("url", ""), "snippet": r.get("description", "")}
-                for r in resp.json().get("web", {}).get("results", [])]
+        data = resp.json()
+        results = []
+        for r in data.get("web", {}).get("results", []):
+            results.append({
+                "title":   r.get("title", ""),
+                "url":     r.get("url", ""),
+                "snippet": r.get("description", ""),
+            })
+        return results
     except Exception:
         return []
 
 
 async def emma_trade_data(client: httpx.AsyncClient, cusip: str) -> str:
     try:
-        url = (f"https://emma.msrb.org/api/TradeActivity/GetTradeActivityByCusip?cusip={cusip}"
-               "&startDate=&endDate=&sortField=tradeDate&sortOrder=desc&page=1&pageSize=10")
-        resp = await client.get(url, timeout=8.0, follow_redirects=True)
+        url = f"https://emma.msrb.org/api/TradeActivity/GetTradeActivityByCusip?cusip={cusip}&startDate=&endDate=&sortField=tradeDate&sortOrder=desc&page=1&pageSize=10"
+        resp = await client.get(url, timeout=10.0, follow_redirects=True)
         if resp.status_code != 200:
             return ""
-        trades = resp.json().get("TradeActivityResult", {}).get("TradeActivityItems", [])
+        data = resp.json()
+        trades = data.get("TradeActivityResult", {}).get("TradeActivityItems", [])
         if not trades:
             return ""
-        lines = ["Recent MSRB EMMA trade activity:"]
+        lines = ["Recent MSRB EMMA trade data:"]
         for t in trades[:8]:
-            lines.append(f"  {t.get('TradeDate', '')[:10]} | {t.get('BuySellIndicator', '')} | "
-                         f"Par: {t.get('ParTraded', 'N/A')} | Price: {t.get('Price', 'N/A')} | Yield: {t.get('Yield', 'N/A')}%")
+            date  = t.get("TradeDate", "")[:10]
+            price = t.get("Price", "N/A")
+            yld   = t.get("Yield", "N/A")
+            par   = t.get("ParTraded", "N/A")
+            side  = t.get("BuySellIndicator", "")
+            lines.append(
+                f"  {date} | {side} | Par: ${par:,} | Price: {price} | Yield: {yld}%"
+                if isinstance(par, (int, float))
+                else f"  {date} | {side} | Par: {par} | Price: {price} | Yield: {yld}%"
+            )
         return "\n".join(lines)
     except Exception:
         return ""
 
 
-def format_search_results(results: list, label: str) -> str:
+def format_search_results(results: list[dict], label: str) -> str:
     if not results:
         return ""
     lines = [f"{label}:"]
     for r in results:
         lines.append(f"  • {r['title']}")
         if r["snippet"]:
-            lines.append(f"    {r['snippet'][:240]}")
+            lines.append(f"    {r['snippet'][:200]}")
         lines.append(f"    Source: {r['url']}")
     return "\n".join(lines)
 
 
-async def gather_web_data(cusip: str, issuer_name: str) -> str:
-    """All web lookups in parallel, hard cap 10s. Searches by the Bloomberg issuer name."""
-    name = issuer_name or cusip
-    year = datetime.now().year
-
-    async def _all():
+async def gather_web_data(cusip: str, issuer_name: str, include_ratings_search: bool = False) -> str:
+    """Run web enrichment in parallel, hard cap 14s."""
+    async def _fetch_all():
         async with httpx.AsyncClient(timeout=httpx.Timeout(8.0, connect=4.0)) as client:
-            return await asyncio.gather(
-                brave_search(client, f'"{name}" rating action Moody\'s S&P Fitch {year - 1} {year}'),
-                brave_search(client, f'"{name}" municipal bond news {year}'),
-                brave_search(client, f'"{name}" annual comprehensive financial report budget audit'),
-                brave_search(client, f'"{name}" population economy largest employers taxpayers', 3),
+            search_name   = issuer_name if issuer_name else cusip
+            ratings_query = f'"{search_name}" rating Moody\'s S&P Fitch municipal bond 2024 2025 2026'
+            news_query    = f'"{search_name}" municipal bond news 2025 2026'
+            credit_query  = f'"{search_name}" municipal credit financial audit 2024 2025'
+            tasks = [
+                brave_search(client, ratings_query, count=4 if include_ratings_search else 3),
+                brave_search(client, news_query,    count=3),
+                brave_search(client, credit_query,  count=3),
                 emma_trade_data(client, cusip),
-                return_exceptions=True,
-            )
+            ]
+            return await asyncio.gather(*tasks, return_exceptions=True)
 
     try:
-        res = await asyncio.wait_for(_all(), timeout=10.0)
+        results = await asyncio.wait_for(_fetch_all(), timeout=14.0)
     except asyncio.TimeoutError:
         return ""
-    res = [r if not isinstance(r, Exception) else ([] if i < 4 else "") for i, r in enumerate(res)]
-    ratings, news, financials, economy, emma = res
-    sections = [s for s in [
-        emma,
-        format_search_results(ratings,    "Web: rating actions"),
-        format_search_results(news,       "Web: news & developments"),
-        format_search_results(financials, "Web: financial reports"),
-        format_search_results(economy,    "Web: economy & demographics"),
-    ] if s]
-    return ("## Live Web Data (retrieved now)\n" + "\n\n".join(sections)) if sections else ""
+
+    ratings_results, news_results, credit_results, emma_trades = [
+        r if not isinstance(r, Exception) else ([] if i < 3 else "")
+        for i, r in enumerate(results)
+    ]
+
+    sections = []
+    if emma_trades:
+        sections.append(emma_trades)
+
+    for block in [
+        format_search_results(ratings_results, "Recent web: rating actions & current ratings"),
+        format_search_results(news_results,    "Recent web: news & developments"),
+        format_search_results(credit_results,  "Recent web: credit & financial"),
+    ]:
+        if block:
+            sections.append(block)
+
+    if not sections:
+        return ""
+
+    return "\n\n## Live Web Data Retrieved at Request Time\n" + "\n\n".join(sections) + "\n"
 
 
-# ── Report generation: six analyst passes run in parallel ────────────────────
-# Splitting the report into six simultaneous Claude calls keeps a full,
-# detailed report near ~30-40 seconds. The page shows each section as it lands.
+# ── Request model ─────────────────────────────────────────────────────────────
 
-SYSTEM_PROMPT = """You are a senior municipal credit analyst at The Tribeca Group, a fixed income portfolio management team at Morgan Stanley. You write rigorous, specific, opinionated issuer-level credit research for portfolio managers.
-
-CRITICAL RULE — NEVER GUESS THE ISSUER OR RATINGS: issuer identity and current ratings come from the ## Bloomberg Data section. Use ONLY that data for the issuer name and current ratings. Do not override or second-guess it. If an ultimate borrower/obligor is given (conduit deal), the credit is the BORROWER — analyze the borrower and name the conduit issuer separately.
-
-Ground rules:
-- This is ISSUER-LEVEL CREDIT research. Ignore bond-specific coupon, maturity, price and duration.
-- Use the live web data for anything 2024 or later. Use your expertise for sector context, financial analysis and judgment.
-- Be specific to this issuer: real figures, real names, real places. No generic muni boilerplate. If a figure is uncertain or estimated, say so (e.g. "~$1.2B (FY2024, est.)").
-- In free-text fields use **bold** for key figures and conclusions and *italics* for emphasis. No emojis.
-- Be complete but economical: every sentence should carry a fact or a judgment. No filler.
-- Return ONLY valid JSON matching the schema. No preamble, no markdown fences."""
-
-PART_PROMPTS = {
-    "overview": """Produce the ISSUER OVERVIEW. JSON schema:
-{
-  "issuer": {
-    "name": "Full official name of the credit (the borrower/obligor on conduit deals)",
-    "conduit_issuer": "Conduit issuer name if applicable, else null",
-    "sector": "GO | Water & Sewer | Electric | School District | Transportation | Healthcare | Higher Ed | Housing | Special Tax | Airport | Toll Road | Public Power | Other",
-    "bond_type": "General Obligation | Revenue | COP/Lease | Special Assessment | Appropriation | Other",
-    "state": "Two-letter state code",
-    "description": "4-5 sentences: what the entity is, what it does, its size, and its credit profile in plain terms"
-  },
-  "service_area": {
-    "summary": "Geographic area served or taxed — concrete (counties, cities, square miles)",
-    "component_entities": ["For county / regional / district credits: every city, town, village or member entity inside it (names only). For utilities or authorities: member systems or service territories. Empty list if not applicable."],
-    "population": "Population with year and trend (e.g. '1.2M (2023), +0.4%/yr')",
-    "economy": "2-3 sentences on the economic base, wealth and income vs state/US, unemployment, key industries",
-    "top_employers": ["Up to 6 largest employers (Name — approx. employees)"],
-    "top_taxpayers_or_customers": ["Up to 6 largest taxpayers (tax-backed) or customers (revenue credits), with % concentration if known"]
-  }
-}""",
-
-    "operations": """Produce the OPERATIONS, REVENUE and SECURITY section. JSON schema:
-{
-  "operations": {
-    "governance": "2-3 sentences: governing body, how chosen, key officials, management quality",
-    "summary": "3-4 sentences on operations: services, scale (customers, enrollment, beds, passengers, miles, etc.), capital plan, labor",
-    "key_facts": ["5-8 short factual bullets: fiscal year end, budget size, employees, system size, rate-setting authority, etc."]
-  },
-  "revenue_sources": [ { "source": "Revenue source", "share": "~XX%", "notes": "One line: stability, pledging, trend" } ],
-  "security_pledge": "3-4 sentences: exactly what secures the bonds — tax levy (limited/unlimited), net revenue pledge, rate covenant, reserve funds, additional bonds test, intercepts, appropriation risk, lien priority."
-}""",
-
-    "metrics": """Produce the KEY FINANCIAL METRICS. JSON schema:
-{
-  "key_metrics": [
-    { "metric": "Sector-specific metric", "value": "Issuer value with units and fiscal year", "median": "Rating-category / sector median", "vs_median": "above | below | in-line", "favorable": true, "notes": "One short line of context" }
-  ]
-}
-Give 10-12 metrics chosen for THIS sector (GO: full value per capita, fund balance %, debt/full value, debt service % of spend, pension/OPEB burden, tax base growth, income vs US. Utilities: DSCR, days cash, debt/plant, rates vs peers, customer concentration. Healthcare: operating margin, days cash, cushion, debt/cap, payer mix, market share. Higher ed: enrollment, demand ratios, endowment/debt, tuition dependence. Transportation/airports: enplanements, CPE, coverage, liquidity). "favorable" = true if credit-positive vs median.""",
-
-    "ratings": """Produce the RATINGS, RECENT DEVELOPMENTS and SECTOR section. JSON schema:
-{
-  "ratings": {
-    "moodys": { "rating": "per Bloomberg, or NR", "outlook": "Stable | Positive | Negative | Under Review | NR", "last_action": "One sentence: what the agency last did and why", "last_action_date": "Mon YYYY or null" },
-    "sp":     { "rating": "...", "outlook": "...", "last_action": "...", "last_action_date": "..." },
-    "fitch":  { "rating": "...", "outlook": "...", "last_action": "...", "last_action_date": "..." }
-  },
-  "rating_history": [ { "date": "Mon YYYY", "agency": "Moody's | S&P | Fitch | KBRA", "action": "Upgrade | Downgrade | Affirmed | Outlook change | Assigned | Watch", "detail": "One sentence: from -> to, and the stated reason" } ],
-  "recent_developments": [ { "date": "Mon YYYY", "headline": "Short factual headline", "impact": "positive | negative | neutral", "detail": "One sentence with specifics" } ],
-  "sector": {
-    "name": "Sector name",
-    "outlook": "Positive | Stable | Negative",
-    "summary": "3 sentences on the national backdrop for this type of credit right now and what is driving it",
-    "issuer_vs_sector": "1-2 sentences: how this issuer is positioned relative to the sector trend"
-  }
-}
-Up to 5 rating history entries and up to 5 recent developments, most recent first.""",
-
-    "credit": """Produce the KEY STRENGTHS and KEY RISKS section. JSON schema:
-{
-  "strengths": [ { "title": "Short headline", "detail": "2 sentences with specific figures" } ],
-  "risks":     [ { "title": "Short headline", "detail": "2 sentences with specific figures" } ]
-}
-4-5 strengths and 4-5 risks.""",
-
-    "view": """Produce the TRIBECA AI ANALYST VIEW. JSON schema:
-{
-  "credit_horizon": {
-    "max_years": 20,
-    "label": "Short (0-5y) | Intermediate (5-10y) | Long (10-20y) | Any tenor (20y+)",
-    "rationale": "2 sentences: how far out this CREDIT holds up given its trajectory. Credit risk only — not duration or rate risk."
-  },
-  "investability": {
-    "1yr":  { "verdict": "INVESTABLE | CAUTIOUS | AVOID", "rationale": "One short sentence, credit-based" },
-    "5yr":  { "verdict": "...", "rationale": "..." },
-    "10yr": { "verdict": "...", "rationale": "..." },
-    "15yr": { "verdict": "...", "rationale": "..." },
-    "20yr": { "verdict": "...", "rationale": "..." }
-  },
-  "overall_recommendation": "BUY | HOLD | REDUCE | AVOID",
-  "analyst_summary": "5-6 sentences: the credit story, the single most important thing to know right now, how it compares to peers, and the stance. Direct and opinionated.",
-  "what_would_change_view": ["3-5 specific triggers that would move the view up or down"],
-  "data_note": "One sentence: which sources were used (Bloomberg, live web, EMMA) and anything that could not be verified"
-}
-max_years must match the label, and the investability verdicts must be consistent with credit_horizon.""",
-}
-
-PART_MAX_TOKENS = {p: 3000 for p in PART_PROMPTS}
-
-
-def extract_json(text: str) -> dict:
-    m = re.search(r"\{[\s\S]*\}", text.strip())
-    if not m:
-        raise ValueError("no JSON in response")
-    return json.loads(m.group())
-
-
-async def run_part(client: httpx.AsyncClient, part: str, context: str, model: str) -> dict:
-    resp = await client.post(
-        "https://api.anthropic.com/v1/messages",
-        headers={"x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json"},
-        json={
-            "model": model,
-            "max_tokens": PART_MAX_TOKENS[part],
-            "system": SYSTEM_PROMPT,
-            "messages": [{"role": "user", "content": f"{context}\n\n---\n\n{PART_PROMPTS[part]}"}],
-        },
-    )
-    if resp.status_code != 200:
-        try:
-            msg = resp.json().get("error", {}).get("message", "")
-        except Exception:
-            msg = resp.text[:200]
-        raise RuntimeError(f"Claude API error {resp.status_code}: {msg}")
-    data = resp.json()
-    text = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
-    try:
-        return extract_json(text)
-    except Exception as e:
-        if data.get("stop_reason") == "max_tokens":
-            raise RuntimeError(f"{part} section ran too long and was cut off")
-        raise RuntimeError(f"could not read {part} section ({e})")
+class CreditIntelRequest(BaseModel):
+    cusip: str
+    pdf_text: Optional[str] = None
+    model: Optional[str] = None
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 
-class CusipRequest(BaseModel):
-    cusip: str
-    model: Optional[str] = None
-
-
 @app.get("/")
-@app.get("/api/health")
 def health():
     return {
         "status": "ok",
         "service": "MuniRadar Credit Intel API",
         "web_enrichment": bool(BRAVE_API_KEY),
-        "bloomberg": "required",
+        "bloomberg": "preferred (EMMA fallback active)",
     }
 
 
-@app.post("/api/lookup")
-async def lookup(req: CusipRequest):
-    """Step 1 of a search: is this CUSIP's issuer already in the library?"""
-    cusip = req.cusip.strip().upper()
-    with db() as conn:
-        iid = find_issuer_by_cusip(conn, cusip)
-    bbg = {}
-    if not iid:
-        bbg = await get_bloomberg_cached(cusip)
-        with db() as conn:
-            iid = find_issuer_by_key(conn, issuer_key(bbg))
-    if not iid:
-        return {"found": False, "issuer": borrower_name(bbg) or bbg.get("ISSUER", "")}
-    with db() as conn:
-        link_cusip(conn, iid, cusip)
-        p = issuer_payload(conn, iid)
-    return {"found": True, "issuer_id": iid, "name": p["name"], "saved_at": p["saved_at"]}
-
-
-@app.post("/api/report")
-async def report(req: CusipRequest):
-    """Step 2 (Pull new): Bloomberg -> web -> 6 parallel Claude passes, streamed as NDJSON."""
+@app.post("/api/credit-intel")
+async def credit_intel(req: CreditIntelRequest):
     if not ANTHROPIC_API_KEY:
         raise HTTPException(status_code=500, detail="ANTHROPIC_API_KEY not configured on server")
+
     cusip = req.cusip.strip().upper()
     model = req.model or DEFAULT_MODEL
-    t0 = time.time()
-    bbg = await get_bloomberg_cached(cusip)
 
-    async def stream():
-        yield json.dumps({"event": "status", "message": "Gathering live web data…"}) + "\n"
-        web = await gather_web_data(cusip, borrower_name(bbg) or bbg.get("ISSUER", ""))
-        retrieved = (f"## Data actually retrieved for this report\n"
-                     f"  Bloomberg: yes\n"
-                     f"  Live web search results: {'yes' if 'Web:' in web else 'NONE — rely on your own knowledge and flag figures that may be stale'}\n"
-                     f"  MSRB EMMA trade data: {'yes' if 'EMMA' in web else 'none'}\n"
-                     f"In data_note, name ONLY the sources marked yes above.")
-        context = f"Analyze the issuer behind CUSIP {cusip}.\n\n{format_bloomberg_data(bbg)}\n\n{web}\n\n{retrieved}"
-        yield json.dumps({"event": "status", "message": "Writing report…"}) + "\n"
+    # ── Step 1: Try Bloomberg first ──
+    blp_data = {}
+    data_source = "bloomberg"
+    bloomberg_section = ""
+    issuer_name = ""
 
-        report_data, errors = {}, []
-        async with httpx.AsyncClient(timeout=httpx.Timeout(150.0, connect=10.0)) as client:
-            tasks = {asyncio.create_task(run_part(client, p, context, model)): p for p in PART_PROMPTS}
-            pending = set(tasks)
-            while pending:
-                done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
-                for t in done:
-                    part = tasks[t]
-                    try:
-                        data = t.result()
-                        report_data.update(data)
-                        yield json.dumps({"event": "part", "part": part, "data": data,
-                                          "seconds": round(time.time() - t0, 1)}) + "\n"
-                    except Exception as e:
-                        errors.append(f"{part}: {e}")
-                        yield json.dumps({"event": "part_error", "part": part, "message": str(e)}) + "\n"
+    try:
+        blp_data = await asyncio.wait_for(fetch_bloomberg(cusip), timeout=10.0)
+        if blp_data:
+            bloomberg_section = format_bloomberg_data(blp_data)
+            issuer_name = blp_data.get("ISSUER", "")
+    except (asyncio.TimeoutError, RuntimeError):
+        blp_data = {}
 
-        seconds = time.time() - t0
-        if errors:
-            yield json.dumps({"event": "error", "message": "Report incomplete — not saved. " + "; ".join(errors)}) + "\n"
-            return
-        try:
-            saved = save_report(cusip, bbg, report_data, seconds)
-            saved.pop("report", None)
-            yield json.dumps({"event": "saved", "issuer": saved, "seconds": round(seconds, 1)}) + "\n"
-        except Exception as e:
-            yield json.dumps({"event": "error", "message": f"Report built but could not be saved: {e}"}) + "\n"
+    # ── Step 2: Fall back to EMMA if Bloomberg unavailable or returned nothing ──
+    if not blp_data or not issuer_name:
+        data_source = "emma"
+        issuer_name = await get_issuer_from_emma(cusip)
+        if issuer_name:
+            bloomberg_section = format_emma_data(issuer_name, cusip)
+        else:
+            # No verified source — still proceed but warn Claude explicitly
+            bloomberg_section = f"## Bond Identification\n  CUSIP: {cusip}\n  WARNING: Neither Bloomberg nor EMMA returned issuer data. Do NOT guess the issuer name. Set issuer name to 'Unknown — CUSIP {cusip}' and mark all ratings NR."
+            data_source = "none"
 
-    return StreamingResponse(stream(), media_type="application/x-ndjson")
+    # ── Step 3: Web enrichment — use more ratings search if no Bloomberg ──
+    include_ratings_search = (data_source != "bloomberg")
+    web_data = await gather_web_data(cusip, issuer_name, include_ratings_search=include_ratings_search)
 
+    pdf_section = ""
+    if req.pdf_text:
+        pdf_section = f"\n\n## Uploaded Research / Document\n{req.pdf_text[:12000]}\n"
 
-@app.get("/api/issuers")
-def list_issuers():
-    with db() as conn:
-        rows = conn.execute("""
-            SELECT i.id, i.name, i.state, i.sector, i.saved_at, i.report_json,
-                   (SELECT GROUP_CONCAT(cusip, ',') FROM issuer_cusips c WHERE c.issuer_id = i.id) AS cusips
-            FROM issuers i ORDER BY i.saved_at DESC, i.id DESC
-        """).fetchall()
-    out = []
-    for r in rows:
-        rep = json.loads(r["report_json"] or "{}")
-        out.append({
-            "id": r["id"], "name": r["name"], "state": r["state"], "sector": r["sector"],
-            "saved_at": r["saved_at"],
-            "cusips": r["cusips"].split(",") if r["cusips"] else [],
-            "recommendation": rep.get("overall_recommendation"),
-            "sector_outlook": (rep.get("sector") or {}).get("outlook"),
-        })
-    return out
+    # ── Step 4: Build prompt ──
+    if data_source == "bloomberg":
+        data_instructions = """Generate a complete credit intelligence card using the Bloomberg data above as the authoritative source for issuer identity and ratings.
+1. Use ONLY the Bloomberg issuer name — do not alter or guess it
+2. Use EXACTLY the Bloomberg ratings and outlooks — do not override with training data
+3. Revenue sources and security pledge — infer from security type and sector
+4. Key financial metrics vs sector benchmarks (use Bloomberg DSCR/DCOH if provided)
+5. Recent developments — prioritize live web data for anything 2024 or later
+6. Investability by tenor — be granular
+7. In data_note, confirm Bloomberg was primary source"""
+    elif data_source == "emma":
+        data_instructions = """Generate a complete credit intelligence card. The issuer name above is verified from EMMA — use it exactly. Bloomberg was unavailable so ratings must be sourced from the live web data provided below.
+1. Use ONLY the EMMA-verified issuer name — do not alter or guess it
+2. For ratings: extract them from the live web data (rating agency search results) — be explicit about what you found vs what is uncertain
+3. If ratings are not found in web data, mark as NR and note web search was inconclusive
+4. Revenue sources and security pledge — infer from security type and sector
+5. Recent developments — use live web data
+6. Investability by tenor — be granular
+7. In data_note, note that issuer was verified via EMMA and ratings sourced from web search"""
+    else:
+        data_instructions = """WARNING: No verified issuer data was available from Bloomberg or EMMA. Do NOT guess the issuer from the CUSIP digits.
+1. Set issuer name to the CUSIP only — do not fabricate a name
+2. Mark all ratings NR
+3. Note in data_note that no verified source was available
+4. Still provide whatever sector analysis and investability framework you can based on any web data found"""
 
+    user_message = f"""Analyze CUSIP: {cusip}
 
-@app.get("/api/issuers/{issuer_id}")
-def get_issuer(issuer_id: int):
-    with db() as conn:
-        p = issuer_payload(conn, issuer_id)
-    if not p:
-        raise HTTPException(status_code=404, detail="Not found")
-    return p
+{bloomberg_section}
+{web_data}{pdf_section}
 
+{data_instructions}"""
 
-@app.delete("/api/issuers/{issuer_id}")
-def delete_issuer(issuer_id: int):
-    with db() as conn:
-        cur = conn.execute("DELETE FROM issuers WHERE id = ?", (issuer_id,))
-        conn.execute("DELETE FROM issuer_cusips WHERE issuer_id = ?", (issuer_id,))
-    if cur.rowcount == 0:
-        raise HTTPException(status_code=404, detail="Not found")
-    return {"deleted": issuer_id}
+    async with httpx.AsyncClient(timeout=90.0) as client:
+        response = await client.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key": ANTHROPIC_API_KEY,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+            json={
+                "model": model,
+                "max_tokens": 4000,
+                "system": SYSTEM_PROMPT,
+                "messages": [{"role": "user", "content": user_message}],
+            },
+        )
+
+    if response.status_code != 200:
+        err = response.json().get("error", {})
+        raise HTTPException(status_code=response.status_code, detail=err.get("message", "Anthropic API error"))
+
+    data = response.json()
+    raw  = data["content"][0]["text"].strip()
+
+    match = re.search(r'\{[\s\S]*\}', raw)
+    if not match:
+        raise HTTPException(status_code=500, detail="Could not parse model response as JSON")
+
+    try:
+        intel = json.loads(match.group())
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=500, detail=f"JSON parse error: {e}")
+
+    return intel
