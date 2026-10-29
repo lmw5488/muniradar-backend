@@ -25,7 +25,7 @@ app.add_middleware(
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 BRAVE_API_KEY     = os.environ.get("BRAVE_API_KEY", "")
 DEFAULT_MODEL     = os.environ.get("DEFAULT_MODEL", "claude-sonnet-5-5")
-BACKEND_VERSION   = "2026-10-29f (expanded issuer names for search)"
+BACKEND_VERSION   = "2026-10-29g (CUSIP web lookup for exact system/obligor)"
 NAME_MODEL        = os.environ.get("NAME_MODEL", "claude-haiku-5-5")   # fast model for issuer-name expansion
 DB_PATH           = os.environ.get("MUNIRADAR_DB", os.path.join(os.path.dirname(os.path.abspath(__file__)), "muniradar.db"))
 
@@ -522,7 +522,20 @@ async def gather_web_data(cusip: str, issuer_name: str, include_ratings_search: 
 _IDENTITY_CACHE: dict = {}   # cusip -> (timestamp, identity); reused by lookup -> report
 
 
-async def expand_issuer_name(short_name: str, ticker: str, cusip: str) -> dict:
+async def cusip_web_hints(cusip: str) -> str:
+    """Search the CUSIP number itself. Pages listing a CUSIP usually show its full
+    description (e.g. '...POWER SYSTEM REVENUE BONDS'), which tells apart issuers whose
+    Bloomberg short names are identical (LADWP Power vs Water, airport vs city)."""
+    async with httpx.AsyncClient(timeout=httpx.Timeout(8.0, connect=4.0)) as client:
+        results = await brave_search(client, f'"{cusip}"', count=6)
+    lines = []
+    for r in results:
+        text = " ".join([r["title"], r["snippet"]] + list(r.get("extra") or []))
+        lines.append(f"- {text[:400]}")
+    return "\n".join(lines)[:2500]
+
+
+async def expand_issuer_name(short_name: str, ticker: str, cusip: str, hints: str = "") -> dict:
     """Bloomberg short names are abbreviated and ambiguous ('DALLAS & FORT WORTH-B').
     A quick call to a fast model turns short name + ticker into the full issuer/obligor
     name that news and rating agencies actually use. Returns {} on any failure."""
@@ -536,15 +549,23 @@ async def expand_issuer_name(short_name: str, ticker: str, cusip: str) -> dict:
                          "content-type": "application/json"},
                 json={
                     "model": NAME_MODEL,
-                    "max_tokens": 1000,
+                    "max_tokens": 1500,
                     "system": ("You identify US municipal bond issuers from Bloomberg identifiers. Return ONLY JSON: "
-                               '{"official_name": "...", "search_name": "..."}. official_name = full legal name of the '
-                               "obligor (the entity whose revenues or taxes pay the bonds). search_name = the name news "
-                               "articles and rating agencies use for that obligor. Use the ticker to disambiguate (e.g. "
-                               "'DALAPT' = Dallas/Fort Worth airport, not the City of Dallas). If unsure, expand the short "
-                               "name literally and do not invent."),
+                               '{"official_name": "...", "search_name": "...", "confirmed": true}. official_name = full '
+                               "legal name of the obligor INCLUDING the specific system or credit that secures the bonds "
+                               "(e.g. 'Department of Water and Power of the City of Los Angeles — Power System'). Never include a bond "
+                               "series, year, coupon or issue name in either field — the same name must apply to every bond of that "
+                               "obligor/system. "
+                               "search_name = the name news articles and rating agencies use for that obligor/system. "
+                               "Bloomberg short names are often truncated (e.g. 'LOS ANG DEPT OF WTR' = Dept of Water AND "
+                               "Power, which has separate Power and Water systems) — do not infer the system from a "
+                               "truncated name. Use the web results for this exact CUSIP to determine the specific "
+                               "system/obligor, and the ticker to disambiguate (e.g. 'DALAPT' = Dallas/Fort Worth airport, "
+                               "not the City of Dallas). Set confirmed=false if the specific system/obligor cannot be "
+                               "determined from the evidence; never invent."),
                     "messages": [{"role": "user", "content":
-                                  f"Bloomberg short name: {short_name}\nBloomberg ticker: {ticker}\nCUSIP: {cusip}"}],
+                                  f"Bloomberg short name: {short_name}\nBloomberg ticker: {ticker}\nCUSIP: {cusip}\n\n"
+                                  f"Web results for this exact CUSIP:\n{hints or '(none found)'}"}],
                 },
             )
         if resp.status_code != 200:
@@ -552,7 +573,15 @@ async def expand_issuer_name(short_name: str, ticker: str, cusip: str) -> dict:
         text = "".join(b.get("text", "") for b in resp.json().get("content", []) if b.get("type") == "text")
         m = re.search(r"\{[\s\S]*\}", text)
         names = json.loads(m.group()) if m else {}
-        return {k: str(names[k]).strip() for k in ("official_name", "search_name") if names.get(k)}
+        def tidy(n: str) -> str:   # drop any series / year / issue detail that slipped in
+            n = re.sub(r"\s*\([^)]*\)", "", str(n))
+            n = re.sub(r",?\s*(\d{4}\s+)?Series\b.*$", "", n, flags=re.I)
+            n = re.sub(r"\s+(Revenue|Refunding)\s+Bonds.*$", "", n, flags=re.I)
+            n = re.sub(r"\s*[—-]\s*(Unlimited Tax |Limited Tax )?General Obligation( Bonds)?$", "", n, flags=re.I)  # GO credit = the entity itself
+            return n.strip(" ,—-")
+        out = {k: tidy(names[k]) for k in ("official_name", "search_name") if names.get(k)}
+        out["confirmed"] = names.get("confirmed", True) is not False
+        return out
     except Exception:
         return {}
 
@@ -579,7 +608,8 @@ async def resolve_identity(cusip: str) -> dict:
         blp_data = {}
     names = {}
     if blp_data and issuer_name:
-        names = await expand_issuer_name(issuer_name, blp_data.get("SECURITY_DES", ""), cusip)
+        names = await expand_issuer_name(issuer_name, blp_data.get("SECURITY_DES", ""), cusip,
+                                         await cusip_web_hints(cusip))
 
     # ── Step 2: Fall back to OpenFIGI (Bloomberg's free identifier service), then EMMA ──
     if not blp_data or not issuer_name:
@@ -587,7 +617,8 @@ async def resolve_identity(cusip: str) -> dict:
         if figi:
             data_source = "openfigi"
             issuer_name = openfigi_search_name(figi["name"])
-            names = await expand_issuer_name(figi["name"], figi.get("ticker", ""), cusip)
+            names = await expand_issuer_name(figi["name"], figi.get("ticker", ""), cusip,
+                                             await cusip_web_hints(cusip))
             bloomberg_section = format_openfigi_data(figi, cusip)
         else:
             data_source = "emma"
@@ -600,9 +631,14 @@ async def resolve_identity(cusip: str) -> dict:
                 data_source = "none"
 
     if names.get("official_name"):
-        bloomberg_section += (f"\n  Expanded issuer name (from Bloomberg short name + ticker): {names['official_name']}"
+        bloomberg_section += (f"\n  Expanded issuer name (from Bloomberg short name + ticker + CUSIP web lookup): {names['official_name']}"
                               f"\n  Commonly referred to as: {names.get('search_name', names['official_name'])}")
+        if not names.get("confirmed", True):
+            bloomberg_section += ("\n  WARNING: the specific system/obligor for this CUSIP could NOT be confirmed "
+                                  "(e.g. Power vs Water system). Do not assume one: say so prominently in issuer.description "
+                                  "and data_note, and keep the analysis to what is common to the issuer.")
     identity = {"data_source": data_source, "issuer_name": issuer_name,
+                "official_name": names.get("official_name", ""),
                 "search_name": names.get("search_name") or names.get("official_name") or "",
                 "section": bloomberg_section, "blp_data": blp_data}
     if data_source != "none":
@@ -689,7 +725,7 @@ def save_report(cusip: str, identity: dict, intel: dict) -> dict:
     """Save as the issuer's report, replacing any older one."""
     iss  = intel.get("issuer") or {}
     name = iss.get("name") or identity["issuer_name"] or cusip
-    key  = issuer_key(identity["issuer_name"]) or issuer_key(name)
+    key  = issuer_key(identity.get("official_name") or identity["issuer_name"]) or issuer_key(name)
     vals = (name, iss.get("state"), iss.get("sector"), json.dumps(intel),
             json.dumps(identity.get("blp_data") or {}), now_iso())
     with db() as conn:
@@ -851,7 +887,7 @@ async def lookup(req: LookupRequest):
         identity = await resolve_identity(cusip)
         if identity["data_source"] != "none":
             with db() as conn:
-                iid = find_issuer(conn, cusip, issuer_key(identity["issuer_name"]))
+                iid = find_issuer(conn, cusip, issuer_key(identity.get("official_name") or identity["issuer_name"]))
     if not iid:
         return {"found": False}
     with db() as conn:
