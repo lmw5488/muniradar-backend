@@ -606,6 +606,85 @@ body { font-size: 16px; }
 .saved-bar { font-size: 14px; }
 .ab-item { font-size: 14px; }
 .api-warn[hidden] { display: none; }   /* unused warning box from the original page */
+
+/* ─── MODE TABS ─── */
+.mode-tabs { display: flex; gap: 4px; background: var(--surface-2); border: 1px solid var(--border-dim); border-radius: 8px; padding: 3px; }
+.mode-tab { background: transparent; border: none; border-radius: 6px; color: var(--text-muted); cursor: pointer; font-size: 13px; font-weight: 600; padding: 7px 14px; }
+.mode-tab:hover { color: var(--gold); }
+.mode-tab.active { background: var(--gold); color: #12213D; }
+@media (max-width: 640px) { .tab-badge { display: none; } .mode-tab { padding: 6px 9px; font-size: 12px; } }
+
+/* ─── PORTFOLIO SCAN ─── */
+.pf-drop {
+  border: 2px dashed var(--border); border-radius: 10px; padding: 26px 18px; text-align: center;
+  color: var(--text-muted); cursor: pointer; transition: all 0.15s; background: var(--surface-2);
+}
+.pf-drop:hover, .pf-drop.drag { border-color: var(--gold); color: var(--gold); background: var(--gold-dim); }
+.pf-drop strong { color: var(--text); }
+.pf-paste { width: 100%; min-height: 90px; margin-top: 12px; background: var(--surface-2); border: 1px solid var(--border-dim); border-radius: 8px; color: var(--text); font-family: 'IBM Plex Mono', monospace; font-size: 13px; padding: 10px 12px; resize: vertical; }
+.pf-paste:focus { outline: none; border-color: var(--gold); }
+.pf-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 14px; }
+.pf-parsed { font-size: 14px; color: var(--text-muted); }
+.pf-parsed strong { color: var(--text); }
+.pf-warn { color: var(--amber); font-size: 13px; }
+.pf-link { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 13px; text-decoration: underline; }
+.pf-progress { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 28px; text-align: center; color: var(--text-muted); font-size: 15px; }
+.pf-bar { height: 6px; background: var(--surface-3); border-radius: 3px; overflow: hidden; margin: 14px auto 6px; max-width: 420px; }
+.pf-bar div { height: 100%; background: var(--gold); transition: width 0.4s; }
+.pf-results { display: flex; flex-direction: column; gap: 16px; }
+.pf-summary { display: grid; grid-template-columns: 260px 1fr; gap: 22px; align-items: start; }
+@media (max-width: 760px) { .pf-summary { grid-template-columns: 1fr; } }
+.pf-rank { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 18px; text-align: center; }
+.pf-rank .lbl { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; color: var(--text-dim); text-transform: uppercase; }
+.pf-rank .num { font-size: 44px; font-weight: 700; line-height: 1.1; margin-top: 6px; }
+.pf-rank .num span { font-size: 18px; color: var(--text-dim); font-weight: 500; }
+.pf-rank .word { font-size: 15px; font-weight: 700; margin-top: 2px; }
+.pf-rank .scale { font-size: 11px; color: var(--text-dim); margin-top: 8px; }
+.pf-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-top: 14px; }
+.pf-kpi { background: var(--surface-2); border: 1px solid var(--border-dim); border-radius: 8px; padding: 10px 12px; }
+.pf-kpi .k { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; }
+.pf-kpi .v { font-size: 20px; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.pf-risks { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+.pf-risk { background: var(--surface-2); border: 1px solid var(--border-dim); border-left: 4px solid var(--amber); border-radius: 10px; padding: 14px 16px; }
+.pf-risk.sev4, .pf-risk.sev5 { border-left-color: var(--red); }
+.pf-risk.sev1, .pf-risk.sev2 { border-left-color: var(--text-dim); }
+.pf-risk .rt { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.pf-risk .rt strong { font-size: 15px; }
+.pf-risk .rd { font-size: 14px; color: var(--text-muted); margin-top: 6px; line-height: 1.5; }
+.pf-risk .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+.pf-risk .chips span { font-size: 11px; background: var(--surface-3); color: var(--text-muted); border-radius: 4px; padding: 2px 7px; }
+.sev { display: inline-flex; gap: 3px; flex-shrink: 0; }
+.sev i { width: 9px; height: 9px; border-radius: 2px; background: var(--surface-3); display: inline-block; }
+.sev i.on { background: var(--amber); }
+.sev.hi i.on { background: var(--red); }
+.sev.lo i.on { background: var(--text-dim); }
+.pf-strengths { font-size: 14px; color: var(--text-muted); }
+.pf-strengths li { margin-left: 18px; }
+.pf-table-wrap { overflow-x: auto; }
+.pf-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.pf-table th { text-align: left; font-size: 11px; font-weight: 700; letter-spacing: 0.07em; color: var(--text-dim); text-transform: uppercase; padding: 0 10px 10px 0; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.pf-table td { padding: 10px 10px 10px 0; border-bottom: 1px solid var(--border-dim); vertical-align: top; }
+.pf-table tr.click { cursor: pointer; }
+.pf-table tr.click:hover td { background: var(--surface-2); }
+.pf-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pf-table .rat { white-space: nowrap; font-size: 13px; color: var(--text-muted); }
+.pf-table .kr { color: var(--text-muted); font-size: 13px; min-width: 220px; }
+.pf-table .flags { margin-top: 3px; }
+.pf-table .flags span { font-size: 10px; background: var(--surface-3); color: var(--text-muted); border-radius: 3px; padding: 1px 6px; margin-right: 4px; display: inline-block; margin-top: 2px; }
+.score { display: inline-block; min-width: 26px; text-align: center; font-weight: 700; border-radius: 4px; padding: 2px 6px; font-size: 13px; }
+.score.s1, .score.s2 { background: var(--green-bg); color: var(--green); }
+.score.s3 { background: var(--amber-bg); color: var(--amber); }
+.score.s4, .score.s5 { background: var(--red-bg); color: var(--red); }
+.score.sx { background: var(--surface-3); color: var(--text-dim); }
+.pf-expo { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+@media (max-width: 760px) { .pf-expo { grid-template-columns: 1fr; } }
+.pf-expo h4 { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px; }
+.pf-bar-row { display: grid; grid-template-columns: 110px 1fr 46px; gap: 8px; align-items: center; font-size: 13px; margin-bottom: 5px; }
+.pf-bar-row .track { height: 8px; background: var(--surface-3); border-radius: 4px; overflow: hidden; }
+.pf-bar-row .fill { height: 100%; background: var(--gold); }
+.pf-bar-row .pct { text-align: right; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.pf-bar-row .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pf-disclosure { font-size: 12px; color: var(--text-dim); line-height: 1.5; }
 </style>
 
 <!-- no settings overlay -->
@@ -657,6 +736,10 @@ body { font-size: 16px; }
   </div>
   <div class="header-actions">
     <span class="tab-badge">Credit Intel</span>
+    <div class="mode-tabs" role="tablist">
+      <button class="mode-tab active" id="tab-issuer" role="tab" onclick="setMode('issuer')">Issuer Report</button>
+      <button class="mode-tab" id="tab-portfolio" role="tab" onclick="setMode('portfolio')">Portfolio Scan</button>
+    </div>
     <button class="btn-icon" onclick="openLibrary()" title="Issuer library" aria-label="Issuer library">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
     </button>
@@ -673,6 +756,7 @@ body { font-size: 16px; }
 </div>
 
 <main class="main">
+<div id="mode-issuer">
   <div id="api-warn" class="api-warn" hidden></div>
 
   <div class="input-card">
@@ -701,6 +785,32 @@ body { font-size: 16px; }
       <p>Enter a CUSIP above to generate a credit intelligence card</p>
     </div>
   </div>
+</div>
+
+<!-- ─── PORTFOLIO SCAN ─── -->
+<div id="mode-portfolio" hidden>
+  <div class="input-card">
+    <h2>Portfolio Credit Scan</h2>
+    <p>Drop in an outside portfolio — CUSIP and quantity (par) for each holding. MuniRadar identifies every issuer, runs a quick credit scan on each, and highlights the portfolio's credit risks.</p>
+    <div class="pf-drop" id="pf-drop" tabindex="0" role="button" aria-label="Choose a CSV or Excel file">
+      <strong>Drag &amp; drop a CSV or Excel file</strong> here, or click to choose one<br>
+      <span style="font-size:13px">Needs two columns: CUSIP and quantity / par. Headers are optional.</span>
+    </div>
+    <input type="file" id="pf-file" accept=".csv,.txt,.tsv,.xlsx,.xls" hidden>
+    <textarea class="pf-paste" id="pf-paste" placeholder="…or paste rows here, e.g.&#10;64966SC87, 500000&#10;23503CBJ5	250000"></textarea>
+    <div class="pf-row">
+      <span class="pf-parsed" id="pf-parsed">No holdings loaded yet.</span>
+      <button class="pf-link" id="pf-clear" hidden onclick="pfClear()">Clear</button>
+    </div>
+    <div class="pf-row">
+      <button class="btn-run" id="pf-run" onclick="pfRun()" disabled>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        Run Portfolio Scan
+      </button>
+    </div>
+  </div>
+  <div id="pf-area"></div>
+</div>
 </main>
 
 <script>
@@ -1132,6 +1242,295 @@ async function deleteIssuer(id) {
 document.getElementById('library-search').addEventListener('input', renderLibrary);
 document.getElementById('library-overlay').addEventListener('click', e => { if (e.target.id === 'library-overlay') closeLibrary(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLibrary(); });
+
+// ─── MODE SWITCH ───
+function setMode(m) {
+  document.getElementById('mode-issuer').hidden = m !== 'issuer';
+  document.getElementById('mode-portfolio').hidden = m !== 'portfolio';
+  document.getElementById('tab-issuer').classList.toggle('active', m === 'issuer');
+  document.getElementById('tab-portfolio').classList.toggle('active', m === 'portfolio');
+  window.scrollTo({ top: 0 });
+}
+
+// ─── PORTFOLIO SCAN ───
+let pfHoldings = [], pfPollTimer = null;
+
+function cusipOk(c) {
+  c = String(c || '').toUpperCase();
+  if (!/^[0-9A-Z*@#]{8}[0-9]$/.test(c)) return false;
+  let sum = 0;
+  for (let i = 0; i < 8; i++) {
+    const ch = c[i];
+    let v = /[0-9]/.test(ch) ? +ch : /[A-Z]/.test(ch) ? ch.charCodeAt(0) - 55 : ({ '*': 36, '@': 37, '#': 38 })[ch];
+    if (i % 2) v *= 2;
+    sum += Math.floor(v / 10) + (v % 10);
+  }
+  return (10 - (sum % 10)) % 10 === +c[8];
+}
+function toNumber(x) {
+  if (typeof x === 'number') return x;
+  let s = String(x || '').trim();
+  const neg = /^\(.*\)$/.test(s);
+  s = s.replace(/[$,\s()]/g, '');
+  let m = 1;
+  if (/[kK]$/.test(s)) { m = 1e3; s = s.slice(0, -1); } else if (/[mM]{1,2}$/.test(s)) { m = 1e6; s = s.replace(/[mM]+$/, ''); }
+  const n = parseFloat(s);
+  return isNaN(n) ? NaN : (neg ? -n : n) * m;
+}
+
+// Rows (arrays of cells) -> [{cusip, par}]
+function pfFromRows(rows) {
+  rows = rows.filter(r => r && r.some(c => String(c ?? '').trim() !== ''));
+  if (!rows.length) return { holdings: [], bad: 0 };
+  let ci = -1, qi = -1, start = 0;
+  // Header row may sit below a title — look in the first 10 rows
+  const hi = rows.slice(0, 10).findIndex(r => r.some(c => /cusip/i.test(String(c ?? ''))));
+  if (hi >= 0) {
+    const head = rows[hi].map(c => String(c ?? '').toLowerCase());
+    ci = head.findIndex(h => /cusip/.test(h));
+    qi = head.findIndex(h => /\b(par|qty|quantity|face|amount|position|holding|units|shares|orig)/.test(h) && !/price|market|\bmv\b|yield|coupon|rate|accrued/.test(h));
+    start = hi + 1;
+  }
+  const out = [], bad = [];
+  for (const r of rows.slice(start)) {
+    const cells = r.map(c => String(c ?? '').trim());
+    let cusip = ci >= 0 ? cells[ci].toUpperCase().replace(/\s/g, '') : cells.map(c => c.toUpperCase().replace(/\s/g, '')).find(cusipOk);
+    let par = NaN;
+    if (qi >= 0) par = toNumber(cells[qi]);
+    else {
+      for (const c of cells) {
+        if (c.toUpperCase().replace(/\s/g, '') === cusip) continue;
+        const n = toNumber(c);
+        if (!isNaN(n) && n > 0) { par = n; break; }
+      }
+    }
+    if (cusip && cusipOk(cusip) && par > 0) out.push({ cusip, par });
+    else bad.push(cells.join(' '));
+  }
+  return { holdings: out, bad: bad.length };
+}
+
+function pfParseText(text) {
+  const lines = String(text || '').split(/\r?\n/);
+  // No header row: read each line on its own — find the CUSIP, then the first quantity after it
+  if (!/cusip/i.test(lines.find(l => l.trim()) || '')) {
+    const holdings = []; let bad = 0;
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const tokens = line.toUpperCase().match(/[0-9A-Z*@#]{9}/g) || [];
+      const cusip = tokens.find(cusipOk);
+      const rest = cusip ? line.replace(new RegExp(cusip, 'i'), ' ') : line;
+      const m = rest.match(/\(?\$?\d[\d,]*(?:\.\d+)?\s*[kKmM]{0,2}\)?/);
+      const par = m ? toNumber(m[0]) : NaN;
+      if (cusip && par > 0) holdings.push({ cusip, par }); else bad++;
+    }
+    return { holdings, bad };
+  }
+  const delim = lines.some(l => l.includes('\t')) ? '\t' : lines.some(l => l.includes(',')) ? ',' : lines.some(l => l.includes(';')) ? ';' : null;
+  const rows = lines.map(l => {
+    if (delim === ',') {   // handle quoted numbers like "1,000,000"
+      const cells = []; let cur = '', q = false;
+      for (const ch of l) { if (ch === '"') q = !q; else if (ch === ',' && !q) { cells.push(cur); cur = ''; } else cur += ch; }
+      cells.push(cur); return cells;
+    }
+    return delim ? l.split(delim) : l.trim().split(/\s+/);
+  });
+  return pfFromRows(rows);
+}
+
+function pfLoadScript(src) {
+  return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
+}
+
+async function pfReadFile(file) {
+  const name = file.name.toLowerCase();
+  if (/\.(xlsx|xls)$/.test(name)) {
+    if (!window.XLSX) await pfLoadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
+    const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    return pfFromRows(XLSX.utils.sheet_to_json(ws, { header: 1, raw: false }));
+  }
+  return pfParseText(await file.text());
+}
+
+function pfSet(result, source) {
+  const merged = {};
+  for (const h of result.holdings) merged[h.cusip] = (merged[h.cusip] || 0) + h.par;
+  pfHoldings = Object.entries(merged).map(([cusip, par]) => ({ cusip, par }));
+  const total = pfHoldings.reduce((a, h) => a + h.par, 0);
+  document.getElementById('pf-parsed').innerHTML = pfHoldings.length
+    ? `<strong>${pfHoldings.length}</strong> CUSIPs · <strong>${fmtPar(total)}</strong> par loaded${source ? ` from ${escHtml(source)}` : ''}` +
+      (result.bad ? ` <span class="pf-warn">· ${result.bad} row${result.bad === 1 ? '' : 's'} skipped (no valid CUSIP or quantity)</span>` : '')
+    : `<span class="pf-warn">No valid CUSIP / quantity rows found${result.bad ? ` (${result.bad} rows skipped)` : ''}.</span>`;
+  document.getElementById('pf-run').disabled = !pfHoldings.length;
+  document.getElementById('pf-clear').hidden = !pfHoldings.length;
+}
+
+function pfClear() {
+  pfHoldings = [];
+  document.getElementById('pf-paste').value = '';
+  document.getElementById('pf-file').value = '';
+  document.getElementById('pf-parsed').textContent = 'No holdings loaded yet.';
+  document.getElementById('pf-run').disabled = true;
+  document.getElementById('pf-clear').hidden = true;
+}
+
+function fmtPar(n) {
+  if (n >= 1e9) return '$' + (n / 1e9).toFixed(2) + 'B';
+  if (n >= 1e6) return '$' + (n / 1e6).toFixed(n >= 1e8 ? 0 : 1) + 'M';
+  if (n >= 1e3) return '$' + Math.round(n / 1e3) + 'K';
+  return '$' + Math.round(n);
+}
+
+async function pfRun() {
+  if (!pfHoldings.length) return;
+  const btn = document.getElementById('pf-run');
+  btn.disabled = true;
+  pfProgress('Starting scan…', 0, 1, 0);
+  try {
+    const start = await libraryFetch('/api/portfolio/start', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ holdings: pfHoldings })
+    });
+    clearInterval(pfPollTimer);
+    pfPollTimer = setInterval(async () => {
+      try {
+        const j = await libraryFetch(`/api/portfolio/${start.job_id}`);
+        if (j.status === 'done') { clearInterval(pfPollTimer); btn.disabled = false; pfRender(j.result); }
+        else if (j.status === 'error') { clearInterval(pfPollTimer); btn.disabled = false; pfError(j.error); }
+        else pfProgress(j.stage, j.done, j.total, j.elapsed);
+      } catch (err) { clearInterval(pfPollTimer); btn.disabled = false; pfError(err.message); }
+    }, 2000);
+  } catch (err) { btn.disabled = false; pfError(err.message); }
+}
+
+function pfProgress(stage, done, total, elapsed) {
+  const pct = total ? Math.round(100 * done / total) : 0;
+  document.getElementById('pf-area').innerHTML = `
+    <div class="pf-progress">
+      <div class="loading-spinner" style="margin:0 auto 12px"></div>
+      <div><strong style="color:var(--text)">${escHtml(stage)}</strong>${total > 1 ? ` · ${done} of ${total}` : ''}</div>
+      <div class="pf-bar"><div style="width:${pct}%"></div></div>
+      <div style="font-size:13px;color:var(--text-dim)">${elapsed ? `${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, '0')} elapsed · ` : ''}a 30–50 CUSIP portfolio usually takes 3–6 minutes</div>
+    </div>`;
+}
+
+function pfError(msg) {
+  document.getElementById('pf-area').innerHTML = `<div class="error-state"><strong>Portfolio scan failed</strong>${escHtml(msg || 'Unknown error')}</div>`;
+}
+
+function sevDots(n) {
+  const cls = n >= 4 ? 'hi' : n <= 2 ? 'lo' : '';
+  return `<span class="sev ${cls}" title="Severity ${n || '?'} of 5">${[1, 2, 3, 4, 5].map(i => `<i class="${i <= (n || 0) ? 'on' : ''}"></i>`).join('')}</span>`;
+}
+function scorePill(n) { return `<span class="score ${n ? 's' + n : 'sx'}">${n || '–'}</span>`; }
+function ratTxt(o) {
+  if (!o || !o.rating || o.rating === 'NR') return '<span style="color:var(--text-dim)">NR</span>';
+  const ol = o.outlook && !/stable|^nr$|^$/i.test(o.outlook) ? o.outlook : '';
+  const col = /pos/i.test(ol) ? 'var(--green)' : 'var(--red)';
+  return escHtml(o.rating) + (ol ? `<span style="color:${col}"> (${escHtml(ol)})</span>` : '');
+}
+
+function pfRender(res) {
+  const v = res.view || {}, s = res.stats || {}, rows = res.rows || [];
+  const c = v.conservativeness || {};
+  const rankColor = c.rank >= 4 ? 'var(--green)' : c.rank === 3 ? 'var(--amber)' : 'var(--red)';
+  const bars = (list, n = 8) => (list || []).slice(0, n).map(x => `
+    <div class="pf-bar-row"><span class="nm" title="${escHtml(x.name)}">${escHtml(x.name)}</span>
+      <span class="track"><span class="fill" style="display:block;width:${Math.min(100, x.pct)}%"></span></span>
+      <span class="pct">${x.pct}%</span></div>`).join('');
+  pfRows = rows;
+  document.getElementById('pf-area').innerHTML = `
+  <div class="pf-results">
+    <div class="section-card">
+      <div class="section-title">Tribeca AI Analyst View · Portfolio Credit Risk</div>
+      <div class="pf-summary">
+        <div class="pf-rank">
+          <div class="lbl">Conservativeness</div>
+          <div class="num" style="color:${rankColor}">${c.rank || '–'}<span> / 5</span></div>
+          <div class="word" style="color:${rankColor}">${escHtml(c.label || '')}</div>
+          <div class="scale">5 = very conservative · 1 = very aggressive</div>
+        </div>
+        <div>
+          <div style="font-size:16px;line-height:1.65">${escHtml(v.summary || '')}</div>
+          ${c.rationale ? `<div style="font-size:14px;color:var(--text-muted);margin-top:8px">${escHtml(c.rationale)}</div>` : ''}
+          <div class="pf-kpis">
+            <div class="pf-kpi"><div class="k">Total par</div><div class="v">${fmtPar(s.total_par || 0)}</div></div>
+            <div class="pf-kpi"><div class="k">Holdings / issuers</div><div class="v">${s.holdings || 0} / ${s.issuers || 0}</div></div>
+            <div class="pf-kpi"><div class="k">Below A</div><div class="v">${s.pct_below_A ?? 0}%</div></div>
+            <div class="pf-kpi"><div class="k">Unrated</div><div class="v">${s.pct_unrated ?? 0}%</div></div>
+            <div class="pf-kpi"><div class="k">Neg. outlook / watch</div><div class="v">${s.pct_negative_outlook ?? 0}%</div></div>
+            <div class="pf-kpi"><div class="k">High spread beta</div><div class="v">${s.pct_high_spread_beta ?? 0}%</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-card">
+      <div class="section-title" style="color:var(--red)">Top Credit Risks</div>
+      <div class="pf-risks">
+        ${(v.top_risks || []).map(r => `
+          <div class="pf-risk sev${r.severity || 3}">
+            <div class="rt"><strong>${escHtml(r.title)}</strong>${sevDots(r.severity)}</div>
+            <div class="rd">${escHtml(r.detail || '')}</div>
+            ${(r.issuers || []).length ? `<div class="chips">${r.issuers.slice(0, 6).map(i => `<span>${escHtml(i)}</span>`).join('')}${r.issuers.length > 6 ? `<span>+${r.issuers.length - 6} more</span>` : ''}</div>` : ''}
+          </div>`).join('') || '<span style="color:var(--text-muted)">No portfolio-level risks returned.</span>'}
+      </div>
+      ${(v.strengths || []).length ? `<div class="pf-strengths" style="margin-top:14px"><strong style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-dim)">Strengths</strong><ul>${v.strengths.map(x => `<li>${escHtml(x)}</li>`).join('')}</ul></div>` : ''}
+    </div>
+
+    <div class="section-card">
+      <div class="section-title">Holdings by Issuer · riskiest first</div>
+      <div class="pf-table-wrap"><table class="pf-table">
+        <thead><tr><th>Issuer</th><th class="num">Par</th><th class="num">%</th><th>Moody's / S&amp;P / Fitch</th><th>Sector</th><th>St</th><th>Risk</th><th>Downgr.</th><th>Spread β</th><th>Key risk</th></tr></thead>
+        <tbody>${rows.map((r, i) => `
+          <tr class="click" onclick="pfOpen(${i})" title="${escHtml(r.cusips.join(', '))} — click for the full issuer report">
+            <td><strong>${escHtml(r.issuer)}</strong><div style="font-size:12px;color:var(--text-dim)">${r.cusips.length} CUSIP${r.cusips.length === 1 ? '' : 's'}${r.library_id ? ' · saved report' : ''}</div></td>
+            <td class="num">${fmtPar(r.par)}</td><td class="num">${r.pct}%</td>
+            <td class="rat">${ratTxt(r.ratings.moodys)} / ${ratTxt(r.ratings.sp)} / ${ratTxt(r.ratings.fitch)}</td>
+            <td>${escHtml(r.sector || '')}</td><td>${escHtml(r.state || '')}</td>
+            <td>${scorePill(r.risk_score)}</td><td>${scorePill(r.downgrade_risk)}</td>
+            <td style="text-transform:capitalize">${escHtml(r.spread_beta || '–')}</td>
+            <td class="kr">${escHtml(r.key_risk || '')}${(r.flags || []).length ? `<div class="flags">${r.flags.slice(0, 4).map(f => `<span>${escHtml(f)}</span>`).join('')}</div>` : ''}</td>
+          </tr>`).join('')}</tbody>
+      </table></div>
+      <div style="font-size:12px;color:var(--text-dim);margin-top:10px">Risk and downgrade scores: 1 = low · 5 = high. Ratings as found in public sources (negative outlooks in red, positive in green). Rating exposure uses the lowest agency rating. Weights are by par.</div>
+    </div>
+
+    <div class="section-card">
+      <div class="section-title">Exposure (% of par)</div>
+      <div class="pf-expo">
+        <div><h4>By rating (lowest agency)</h4>${bars(s.by_rating)}</div>
+        <div><h4>By sector</h4>${bars(s.by_sector)}</div>
+        <div><h4>By state</h4>${bars(s.by_state)}</div>
+      </div>
+    </div>
+
+    ${(res.invalid || []).length ? `<div class="pf-warn">Skipped ${res.invalid.length} row(s): ${res.invalid.slice(0, 8).map(x => escHtml(x.cusip || '?') + ' (' + escHtml(x.reason) + ')').join(', ')}</div>` : ''}
+    <div class="pf-disclosure">Tribeca AI Analyst View — generated by AI from Bloomberg OpenFIGI identifiers, public web sources and saved MuniRadar reports for internal discussion only. Not a credit rating, a recommendation or investment advice; ratings are sourced from public web data and may be incomplete or out of date. Verify before acting. Scan completed in ${Math.round((res.seconds || 0) / 60 * 10) / 10} min.</div>
+  </div>`;
+}
+
+let pfRows = [];
+async function pfOpen(i) {
+  const r = pfRows[i];
+  if (!r || r.unknown) return;
+  setMode('issuer');
+  document.getElementById('cusip-input').value = r.cusips[0];
+  if (r.library_id) { try { await openSaved(r.library_id, r.cusips[0]); return; } catch (e) {} }
+  runIntel();
+}
+
+(function pfInit() {
+  const drop = document.getElementById('pf-drop'), file = document.getElementById('pf-file');
+  const handle = async f => { try { pfSet(await pfReadFile(f), f.name); } catch (e) { pfSet({ holdings: [], bad: 0 }); alert(`Couldn't read ${f.name}: ${e.message || e}`); } };
+  drop.addEventListener('click', () => file.click());
+  drop.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); file.click(); } });
+  file.addEventListener('change', () => file.files[0] && handle(file.files[0]));
+  ['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('drag'); }));
+  ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('drag'); }));
+  drop.addEventListener('drop', e => { const f = e.dataTransfer.files[0]; if (f) handle(f); });
+  let t; document.getElementById('pf-paste').addEventListener('input', e => { clearTimeout(t); t = setTimeout(() => pfSet(pfParseText(e.target.value), 'pasted rows'), 300); });
+})();
 
 // ─── RATING ACTIONS BANNER ───
 let abItems = [], abIdx = 0, abTimer = null, abPaused = false;

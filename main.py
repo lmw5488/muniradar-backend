@@ -25,7 +25,7 @@ app.add_middleware(
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 BRAVE_API_KEY     = os.environ.get("BRAVE_API_KEY", "")
 DEFAULT_MODEL     = os.environ.get("DEFAULT_MODEL", "claude-sonnet-5-5")
-BACKEND_VERSION   = "2026-10-29i (reads full rating/financial reports)"
+BACKEND_VERSION   = "2026-10-29j (portfolio scan)"
 NAME_MODEL        = os.environ.get("NAME_MODEL", "claude-haiku-5-5")   # fast model for issuer-name expansion
 DB_PATH           = os.environ.get("MUNIRADAR_DB", os.path.join(os.path.dirname(os.path.abspath(__file__)), "muniradar.db"))
 
@@ -276,36 +276,53 @@ def format_emma_data(issuer_name: str, cusip: str) -> str:
 OPENFIGI_API_KEY = os.environ.get("OPENFIGI_API_KEY", "")  # optional; raises rate limit
 
 
-async def get_issuer_from_openfigi(cusip: str) -> dict:
-    """Look up the CUSIP on OpenFIGI. Returns {} if not found or unreachable."""
+_FIGI_CACHE: dict = {}   # cusip -> parsed OpenFIGI result ({} = not found)
+
+
+def _parse_figi(entry) -> dict:
+    items = (entry or {}).get("data") if isinstance(entry, dict) else None
+    if not items or not items[0].get("name"):
+        return {}
+    item = items[0]
+    return {
+        "name":          item.get("name", ""),
+        "ticker":        item.get("ticker", ""),
+        "security_type": item.get("securityType", ""),
+        "market_sector": item.get("marketSector", ""),
+        "figi":          item.get("figi", ""),
+    }
+
+
+async def openfigi_batch(cusips: list) -> None:
+    """Look up many CUSIPs on OpenFIGI (10 per request without a key, 100 with one) and cache them.
+    Retries when OpenFIGI's rate limit (25 requests/min without a key) is hit."""
+    todo = [c for c in dict.fromkeys(cusips) if c not in _FIGI_CACHE]
+    size = 100 if OPENFIGI_API_KEY else 10
     headers = {"Content-Type": "application/json"}
     if OPENFIGI_API_KEY:
         headers["X-OPENFIGI-APIKEY"] = OPENFIGI_API_KEY
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.post(
-                "https://api.openfigi.com/v3/mapping",
-                headers=headers,
-                json=[{"idType": "ID_CUSIP", "idValue": cusip}],
-            )
-        if resp.status_code != 200:
-            return {}
-        result = resp.json()
-        items = (result[0] or {}).get("data") if isinstance(result, list) and result else None
-        if not items:
-            return {}
-        item = items[0]
-        if not item.get("name"):
-            return {}
-        return {
-            "name":         item.get("name", ""),
-            "ticker":       item.get("ticker", ""),
-            "security_type": item.get("securityType", ""),
-            "market_sector": item.get("marketSector", ""),
-            "figi":         item.get("figi", ""),
-        }
-    except Exception:
-        return {}
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        for i in range(0, len(todo), size):
+            chunk = todo[i:i + size]
+            for attempt in range(6):
+                try:
+                    resp = await client.post("https://api.openfigi.com/v3/mapping", headers=headers,
+                                             json=[{"idType": "ID_CUSIP", "idValue": c} for c in chunk])
+                except Exception:
+                    resp = None
+                if resp is not None and resp.status_code == 200:
+                    for c, entry in zip(chunk, resp.json()):
+                        _FIGI_CACHE[c] = _parse_figi(entry)
+                    break
+                await asyncio.sleep(3 + 3 * attempt)
+
+
+async def get_issuer_from_openfigi(cusip: str) -> dict:
+    """Look up the CUSIP on OpenFIGI. Returns {} if not found or unreachable."""
+    if cusip in _FIGI_CACHE:
+        return _FIGI_CACHE[cusip]
+    await openfigi_batch([cusip])
+    return _FIGI_CACHE.get(cusip, {})
 
 
 def openfigi_search_name(name: str) -> str:
@@ -332,6 +349,20 @@ def format_openfigi_data(figi: dict, cusip: str) -> str:
 
 # ── Web enrichment helpers ────────────────────────────────────────────────────
 
+BRAVE_QPS    = float(os.environ.get("BRAVE_QPS", "1"))   # Brave free plan = 1 search/second; raise if on a paid plan
+_BRAVE_LOCK  = asyncio.Lock()
+_BRAVE_LAST  = [0.0]
+
+
+async def _brave_pace():
+    """Space Brave requests out so they don't get rejected for exceeding the plan's rate."""
+    async with _BRAVE_LOCK:
+        wait = _BRAVE_LAST[0] + (1.05 / BRAVE_QPS) - time.time()
+        if wait > 0:
+            await asyncio.sleep(wait)
+        _BRAVE_LAST[0] = time.time()
+
+
 async def brave_search(client: httpx.AsyncClient, query: str, count: int = 5,
                        freshness: Optional[str] = None) -> list[dict]:
     """Brave web search. freshness='py' limits results to the past year."""
@@ -343,6 +374,7 @@ async def brave_search(client: httpx.AsyncClient, query: str, count: int = 5,
     try:
         # Brave's free plan allows ~1 search/second: retry when rate-limited (429)
         for attempt in range(8):
+            await _brave_pace()
             resp = await client.get(
                 "https://api.search.brave.com/res/v1/web/search",
                 headers={"Accept": "application/json", "X-Subscription-Token": BRAVE_API_KEY},
@@ -1001,6 +1033,314 @@ async def lookup(req: LookupRequest):
         link_cusip(conn, iid, cusip)
         meta = library_meta(conn, iid)
     return {"found": True, **meta}
+
+
+# ── Portfolio scan ────────────────────────────────────────────────────────────
+# Upload CUSIP + par -> identify every holding -> quick credit scan per issuer
+# (saved library report reused when available) -> par-weighted stats -> AI view
+# of how conservative the portfolio is and its top risks. Runs as a background
+# job; the page polls for progress. Nothing is saved.
+
+_JOBS: dict = {}
+SCAN_CONCURRENCY = 5
+
+_MDY = ["AAA", "AA1", "AA2", "AA3", "A1", "A2", "A3", "BAA1", "BAA2", "BAA3", "BA1", "BA2", "BA3",
+        "B1", "B2", "B3", "CAA1", "CAA2", "CAA3", "CA", "C"]
+_SPF = ["AAA", "AA+", "AA", "AA-", "A+", "A", "A-", "BBB+", "BBB", "BBB-", "BB+", "BB", "BB-",
+        "B+", "B", "B-", "CCC+", "CCC", "CCC-", "CC", "C", "D"]
+
+
+def cusip_valid(c: str) -> bool:
+    c = (c or "").upper()
+    if not re.fullmatch(r"[0-9A-Z*@#]{8}[0-9]", c):
+        return False
+    total = 0
+    for i, ch in enumerate(c[:8]):
+        v = int(ch) if ch.isdigit() else (ord(ch) - 55 if ch.isalpha() else {"*": 36, "@": 37, "#": 38}[ch])
+        if i % 2:
+            v *= 2
+        total += v // 10 + v % 10
+    return (10 - total % 10) % 10 == int(c[8])
+
+
+def rating_notch(r) -> Optional[int]:
+    """'Aa2' / 'AA-' / 'A1 (sf)' -> 1 (AAA) ... 22 (D). None for NR/WR/unknown."""
+    t = re.sub(r"\(.*?\)|\*.*$|/.*$", "", str(r or "")).strip().upper().replace(" ", "")
+    if not t or t in ("NR", "WR", "N/A", "NA"):
+        return None
+    if t in _MDY and not t.endswith(("+", "-")) and (t != "AAA" or str(r).strip().startswith("Aaa")):
+        return _MDY.index(t) + 1
+    if t in _SPF:
+        return _SPF.index(t) + 1
+    return _MDY.index(t) + 1 if t in _MDY else None
+
+
+def rating_bucket(notch: Optional[int]) -> str:
+    if notch is None:
+        return "NR"
+    return "AAA" if notch == 1 else "AA" if notch <= 4 else "A" if notch <= 7 else "BBB" if notch <= 10 else "Below IG"
+
+
+async def claude_json(system: str, prompt: str, max_tokens: int = 6000, model: Optional[str] = None) -> dict:
+    async with httpx.AsyncClient(timeout=180.0) as client:
+        resp = await client.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={"x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json"},
+            json={"model": model or DEFAULT_MODEL, "max_tokens": max_tokens, "system": system,
+                  "messages": [{"role": "user", "content": prompt}]},
+        )
+    if resp.status_code != 200:
+        raise RuntimeError(f"Claude API error {resp.status_code}")
+    text = "".join(b.get("text", "") for b in resp.json().get("content", []) if b.get("type") == "text")
+    m = re.search(r"\{[\s\S]*\}", text)
+    if not m:
+        raise RuntimeError("Could not read model response")
+    return json.loads(m.group())
+
+
+SCAN_SYSTEM = """You are a conservative municipal credit analyst at The Tribeca Group (Morgan Stanley) screening an outside portfolio for CREDIT RISK. Be skeptical and specific. Issuer-level credit only — ignore coupon, maturity, price and duration.
+Ratings: take them ONLY from the evidence provided (saved report or web results); use the most recent dated rating per agency; if an agency's rating is not in the evidence, use "NR". Never invent ratings.
+Return ONLY JSON:
+{
+  "issuer": "Full official name of the obligor/system",
+  "sector": "GO | Water & Sewer | Electric | School District | Transportation | Airport | Toll Road | Healthcare | Higher Ed | Housing | Special Tax | Land-Secured | Appropriation/Lease | Other",
+  "state": "Two-letter code",
+  "ratings": {"moodys": {"rating": "", "outlook": ""}, "sp": {"rating": "", "outlook": ""}, "fitch": {"rating": "", "outlook": ""}},
+  "risk_score": 1,
+  "downgrade_risk": 1,
+  "spread_beta": "low | medium | high",
+  "key_risk": "The single biggest credit concern, <= 12 words",
+  "flags": ["short tags, e.g. negative outlook, below A, unrated, conduit, project finance, land-secured, appropriation risk, small private college, standalone hospital, pension stress, structural deficit, declining population, concentration in one employer/taxpayer, litigation, recent downgrade"]
+}
+risk_score: 1 = very low credit risk (e.g. AAA/AA essential-service, stable), 3 = moderate, 5 = high (spec-grade, distressed or highly speculative structure).
+downgrade_risk: 1-5 likelihood of a downgrade in the next 12-24 months (negative outlooks/watches, deteriorating trends => higher).
+spread_beta: how much this credit's spread would likely widen in a muni sell-off — high for lower-rated, negative-outlook, deteriorating or high-beta sectors (hospitals, higher ed, special tax, project finance), low for high-grade essential-service and strong GOs."""
+
+PORTFOLIO_SYSTEM = """You are a conservative municipal credit portfolio manager at The Tribeca Group (Morgan Stanley) reviewing an OUTSIDE portfolio a prospect holds. Your job is to surface and emphasize its CREDIT RISKS clearly and specifically. Strengths are secondary. Issuer-level credit only — not duration or interest-rate risk.
+Return ONLY JSON:
+{
+  "conservativeness": {"rank": 3, "label": "Very aggressive | Aggressive | Moderate | Conservative | Very conservative", "rationale": "2 sentences on why"},
+  "summary": "2-3 sentence headline view of the portfolio's credit risk for a PM",
+  "top_risks": [
+    {"title": "2-4 word risk name (e.g. Downgrade risk, Spread risk, Lower-quality exposure, Issuer concentration, Sector headwinds, Structural risk, State concentration)",
+     "severity": 4,
+     "detail": "<= 25 words: what it is in this portfolio, with % of par where useful",
+     "issuers": ["the issuers driving it"]}
+  ],
+  "strengths": ["<= 12 words each, at most 3"]
+}
+conservativeness.rank: 5 = very conservative (high-grade, diversified, stable), 1 = very aggressive. Severity: 1 = minor ... 5 = serious. Give exactly 5 top_risks, most severe first. Consider downgrade risk, spread risk (lower-rated, negative-outlook, deteriorating or high-beta credits will be more volatile), credit quality mix, unrated paper, issuer/sector/state concentration, sector headwinds and structural risks. Use the computed statistics — do not recompute them differently."""
+
+
+def _report_context(report: dict) -> str:
+    keep = {k: report.get(k) for k in ("issuer", "ratings", "risks", "strengths", "key_metrics", "recent_developments",
+                                       "investability", "overall_recommendation", "analyst_note", "security_pledge")}
+    return "## Saved MuniRadar report for this issuer\n" + json.dumps(keep)[:9000]
+
+
+async def scan_issuer(group: dict) -> dict:
+    name = group["official_name"] or group["issuer_name"]
+    context = ""
+    with db() as conn:
+        iid = None
+        for c in group["cusips"]:
+            iid = find_issuer(conn, c)
+            if iid:
+                break
+        iid = iid or find_issuer(conn, "", issuer_key(name))
+        row = conn.execute("SELECT report_json FROM issuers WHERE id = ?", (iid,)).fetchone() if iid else None
+    if row:
+        group["library_id"] = iid
+        context = _report_context(json.loads(row["report_json"]))
+    else:
+        search = group["search_name"] or name
+        year = datetime.now().year
+        async with httpx.AsyncClient(timeout=httpx.Timeout(8.0, connect=4.0)) as client:
+            r1, r2 = await asyncio.gather(
+                brave_search(client, f"{search} Moody's S&P Fitch rating outlook", count=6),
+                brave_search(client, f"{search} downgrade negative outlook deficit lawsuit {year}", count=5, freshness="py"),
+            )
+        context = "\n\n".join(x for x in [format_search_results(r1, "Web: ratings & outlooks"),
+                                         format_search_results(r2, "Web (past 12 months): negative developments")] if x)
+    prompt = (f"Today is {datetime.now().strftime('%B %d, %Y')}.\n\n{group['section']}\n\n"
+              f"CUSIPs held from this issuer: {', '.join(group['cusips'])}\n\n{context or '(no evidence found)'}")
+    try:
+        out = await claude_json(SCAN_SYSTEM, prompt, max_tokens=6000)
+    except Exception as e:
+        out = {"issuer": name, "risk_score": None, "key_risk": f"Scan failed ({e}) — review manually", "flags": ["scan failed"]}
+    return out
+
+
+def _clamp(v, lo=1, hi=5):
+    try:
+        return max(lo, min(hi, int(round(float(v)))))
+    except Exception:
+        return None
+
+
+def portfolio_stats(rows: list, total_par: float) -> dict:
+    def share(pred):
+        return round(100 * sum(r["par"] for r in rows if pred(r)) / total_par, 1) if total_par else 0.0
+
+    def by(field):
+        acc = {}
+        for r in rows:
+            acc[r.get(field) or "Unknown"] = acc.get(r.get(field) or "Unknown", 0) + r["par"]
+        return [{"name": k, "pct": round(100 * v / total_par, 1)} for k, v in sorted(acc.items(), key=lambda x: -x[1])]
+
+    neg = lambda r: any(re.search(r"neg|watch|review", str((r["ratings"].get(a) or {}).get("outlook", "")), re.I)
+                        for a in ("moodys", "sp", "fitch"))
+    scored = [r for r in rows if r.get("risk_score")]
+    wavg = (sum(r["risk_score"] * r["par"] for r in scored) / sum(r["par"] for r in scored)) if scored else None
+    return {
+        "total_par": total_par,
+        "holdings": sum(len(r["cusips"]) for r in rows),
+        "issuers": len(rows),
+        "top_issuers": [{"name": r["issuer"], "pct": r["pct"]} for r in sorted(rows, key=lambda r: -r["par"])[:5]],
+        "by_sector": by("sector"),
+        "by_state": by("state"),
+        "by_rating": by("bucket"),
+        "pct_below_A": share(lambda r: r["notch"] is not None and r["notch"] >= 8),
+        "pct_below_IG": share(lambda r: r["notch"] is not None and r["notch"] >= 11),
+        "pct_unrated": share(lambda r: r["notch"] is None),
+        "pct_negative_outlook": share(neg),
+        "pct_high_risk": share(lambda r: (r.get("risk_score") or 0) >= 4),
+        "pct_high_downgrade_risk": share(lambda r: (r.get("downgrade_risk") or 0) >= 4),
+        "pct_high_spread_beta": share(lambda r: r.get("spread_beta") == "high"),
+        "weighted_risk_score": round(wavg, 2) if wavg else None,
+    }
+
+
+async def run_portfolio(job: dict, holdings: list):
+    try:
+        cusips = [h["cusip"] for h in holdings]
+        job.update(status="running", stage="Identifying holdings", done=0, total=len(cusips))
+        await openfigi_batch(cusips)
+
+        sem = asyncio.Semaphore(4)
+        identities = {}
+
+        async def ident(c):
+            async with sem:
+                identities[c] = await resolve_identity(c)
+                job["done"] += 1
+        await asyncio.gather(*[ident(c) for c in cusips])
+
+        # Group holdings by issuer/obligor
+        groups = {}
+        par_by_cusip = {h["cusip"]: h["par"] for h in holdings}
+        for c in cusips:
+            idt = identities[c]
+            if idt["data_source"] == "none":
+                key = f"UNKNOWN-{c}"
+            else:
+                key = issuer_key(idt.get("official_name") or idt["issuer_name"])
+            g = groups.setdefault(key, {"cusips": [], "par": 0.0, "issuer_name": idt["issuer_name"],
+                                        "official_name": idt.get("official_name", ""), "search_name": idt.get("search_name", ""),
+                                        "section": idt["section"], "unknown": idt["data_source"] == "none"})
+            g["cusips"].append(c)
+            g["par"] += par_by_cusip[c]
+
+        known = [g for g in groups.values() if not g["unknown"]]
+        job.update(stage="Scanning issuer credits", done=0, total=len(known))
+        sem2 = asyncio.Semaphore(SCAN_CONCURRENCY)
+
+        async def scan(g):
+            async with sem2:
+                g["scan"] = await scan_issuer(g)
+                job["done"] += 1
+        await asyncio.gather(*[scan(g) for g in known])
+
+        total_par = sum(g["par"] for g in groups.values()) or 1.0
+        rows = []
+        for g in groups.values():
+            sc = g.get("scan") or {}
+            ratings = sc.get("ratings") or {}
+            notches = [n for n in (rating_notch((ratings.get(a) or {}).get("rating")) for a in ("moodys", "sp", "fitch")) if n]
+            lowest = max(notches) if notches else None
+            rows.append({
+                "issuer": sc.get("issuer") or g["official_name"] or g["issuer_name"] or f"Unidentified — {g['cusips'][0]}",
+                "cusips": g["cusips"], "par": g["par"], "pct": round(100 * g["par"] / total_par, 1),
+                "sector": sc.get("sector") or ("Unknown" if g["unknown"] else ""), "state": sc.get("state") or "",
+                "ratings": {a: (ratings.get(a) or {}) for a in ("moodys", "sp", "fitch")},
+                "notch": lowest, "bucket": rating_bucket(lowest) if not g["unknown"] else "Unidentified",
+                "risk_score": _clamp(sc.get("risk_score")), "downgrade_risk": _clamp(sc.get("downgrade_risk")),
+                "spread_beta": sc.get("spread_beta") if sc.get("spread_beta") in ("low", "medium", "high") else None,
+                "key_risk": sc.get("key_risk") or ("Issuer could not be identified — verify CUSIP" if g["unknown"] else ""),
+                "flags": sc.get("flags") or (["unidentified"] if g["unknown"] else []),
+                "library_id": g.get("library_id"), "unknown": g["unknown"],
+            })
+        rows.sort(key=lambda r: (-(r["risk_score"] or 0), -r["par"]))
+        stats = portfolio_stats([r for r in rows], total_par)
+
+        job.update(stage="Building portfolio risk view", done=0, total=1)
+        table = "\n".join(
+            f"- {r['issuer']} | {r['pct']}% of par | {r['sector']} | {r['state']} | "
+            f"Mdy {r['ratings']['moodys'].get('rating', 'NR')} {r['ratings']['moodys'].get('outlook', '')} / "
+            f"S&P {r['ratings']['sp'].get('rating', 'NR')} {r['ratings']['sp'].get('outlook', '')} / "
+            f"Fitch {r['ratings']['fitch'].get('rating', 'NR')} {r['ratings']['fitch'].get('outlook', '')} | "
+            f"risk {r['risk_score']} | downgrade {r['downgrade_risk']} | spread beta {r['spread_beta']} | "
+            f"{r['key_risk']} | flags: {', '.join(r['flags'])}" for r in rows)
+        prompt = (f"Portfolio statistics (par-weighted):\n{json.dumps({k: v for k, v in stats.items() if k != 'total_par'})}\n\n"
+                  f"Holdings by issuer (riskiest first):\n{table}")
+        try:
+            view = await claude_json(PORTFOLIO_SYSTEM, prompt, max_tokens=8000)
+        except Exception as e:
+            view = {"summary": f"Portfolio view could not be generated ({e}). Holding-level scan below is complete.",
+                    "top_risks": [], "strengths": [], "conservativeness": {}}
+        cons = view.get("conservativeness") or {}
+        cons["rank"] = _clamp(cons.get("rank"))
+        view["conservativeness"] = cons
+        for r_ in view.get("top_risks") or []:
+            r_["severity"] = _clamp(r_.get("severity"))
+        job["done"] = 1
+        job.update(status="done", stage="Done", result={"view": view, "stats": stats, "rows": rows,
+                                                         "invalid": job.get("invalid", []),
+                                                         "seconds": round(time.time() - job["started"])})
+    except Exception as e:
+        job.update(status="error", error=str(e))
+
+
+class PortfolioRequest(BaseModel):
+    holdings: list
+
+
+@app.post("/api/portfolio/start")
+async def portfolio_start(req: PortfolioRequest):
+    if not ANTHROPIC_API_KEY:
+        raise HTTPException(status_code=500, detail="ANTHROPIC_API_KEY not configured on server")
+    agg, invalid = {}, []
+    for h in req.holdings[:300]:
+        c = str((h or {}).get("cusip", "")).strip().upper()
+        try:
+            par = float(re.sub(r"[^0-9.\-]", "", str((h or {}).get("par", "0"))) or 0)
+        except ValueError:
+            par = 0
+        if not cusip_valid(c) or par <= 0:
+            invalid.append({"cusip": c, "par": (h or {}).get("par"), "reason": "invalid CUSIP" if not cusip_valid(c) else "no quantity"})
+            continue
+        agg[c] = agg.get(c, 0) + par
+    if not agg:
+        raise HTTPException(status_code=400, detail="No valid CUSIP / quantity rows found")
+    if len(agg) > 150:
+        raise HTTPException(status_code=400, detail="Please scan at most 150 CUSIPs at a time")
+    # forget jobs older than 2 hours
+    for jid in [j for j, v in _JOBS.items() if time.time() - v["started"] > 7200]:
+        _JOBS.pop(jid, None)
+    jid = f"{int(time.time() * 1000):x}"
+    job = {"id": jid, "status": "queued", "stage": "Queued", "done": 0, "total": len(agg),
+           "started": time.time(), "invalid": invalid}
+    _JOBS[jid] = job
+    asyncio.create_task(run_portfolio(job, [{"cusip": c, "par": p} for c, p in agg.items()]))
+    return {"job_id": jid, "valid": len(agg), "invalid": invalid}
+
+
+@app.get("/api/portfolio/{job_id}")
+def portfolio_status(job_id: str):
+    job = _JOBS.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Scan not found (it may have expired — please rerun)")
+    return {k: v for k, v in job.items() if k != "started"} | {"elapsed": round(time.time() - job["started"])}
 
 
 # ── Recent muni rating actions (banner) ───────────────────────────────────────
