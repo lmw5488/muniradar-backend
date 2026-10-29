@@ -537,6 +537,33 @@ body {
 .library-del { background: transparent; border: none; color: var(--text-dim); cursor: pointer; font-size: 16px; line-height: 1; padding: 4px 6px; border-radius: 4px; flex-shrink: 0; }
 .library-del:hover { color: var(--red); background: var(--red-bg); }
 .library-empty { color: var(--text-muted); font-size: 13px; text-align: center; padding: 40px 12px; }
+
+/* ─── RATING ACTIONS BANNER ─── */
+.actions-banner {
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  padding: 0 max(24px, env(safe-area-inset-left, 0px));
+  height: 38px;
+  display: flex; align-items: center; gap: 10px;
+  font-size: 13px;
+  overflow: hidden;
+}
+.actions-banner[hidden] { display: none; }
+.ab-label { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; color: var(--gold); text-transform: uppercase; white-space: nowrap; flex-shrink: 0; }
+.ab-item {
+  flex: 1; min-width: 0; color: var(--text); text-decoration: none;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  transition: opacity 0.35s ease;
+}
+.ab-item:hover { color: var(--gold-light); text-decoration: underline; }
+.ab-item.fading { opacity: 0; }
+.ab-dir { font-size: 10px; margin-right: 6px; }
+.ab-dir.up { color: var(--green); } .ab-dir.down { color: var(--red); } .ab-dir.neutral { color: var(--text-dim); }
+.ab-date { color: var(--text-dim); margin-left: 6px; font-size: 12px; }
+.ab-nav { background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 16px; line-height: 1; padding: 2px 6px; border-radius: 4px; flex-shrink: 0; }
+.ab-nav:hover { color: var(--gold); background: var(--gold-dim); }
+.ab-count { font-size: 11px; color: var(--text-dim); white-space: nowrap; flex-shrink: 0; font-family: 'IBM Plex Mono', monospace; }
+@media (max-width: 640px) { .ab-label, .ab-count { display: none; } }
 </style>
 
 <!-- no settings overlay -->
@@ -593,6 +620,15 @@ body {
     </button>
   </div>
 </header>
+
+<!-- ─── RATING ACTIONS BANNER ─── -->
+<div class="actions-banner" id="actions-banner" hidden>
+  <span class="ab-label">Rating actions · past 2 weeks</span>
+  <button class="ab-nav" id="ab-prev" title="Previous" aria-label="Previous rating action">‹</button>
+  <a class="ab-item" id="ab-item" target="_blank" rel="noopener noreferrer"></a>
+  <button class="ab-nav" id="ab-next" title="Next" aria-label="Next rating action">›</button>
+  <span class="ab-count" id="ab-count"></span>
+</div>
 
 <main class="main">
   <div id="api-warn" class="api-warn" hidden></div>
@@ -1054,6 +1090,51 @@ async function deleteIssuer(id) {
 document.getElementById('library-search').addEventListener('input', renderLibrary);
 document.getElementById('library-overlay').addEventListener('click', e => { if (e.target.id === 'library-overlay') closeLibrary(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLibrary(); });
+
+// ─── RATING ACTIONS BANNER ───
+let abItems = [], abIdx = 0, abTimer = null, abPaused = false;
+
+function abShow(i, animate = true) {
+  if (!abItems.length) return;
+  abIdx = (i + abItems.length) % abItems.length;
+  const a = abItems[abIdx];
+  const el = document.getElementById('ab-item');
+  const paint = () => {
+    const arrow = a.direction === 'up' ? '▲' : a.direction === 'down' ? '▼' : '●';
+    const d = a.date ? new Date(a.date + 'T12:00:00') : null;
+    const dateTxt = d && !isNaN(d) ? d.toLocaleDateString([], { month: 'short', day: 'numeric' }) : '';
+    el.innerHTML = `<span class="ab-dir ${escHtml(a.direction)}">${arrow}</span>${escHtml(a.headline)}${dateTxt ? `<span class="ab-date">· ${escHtml(dateTxt)}</span>` : ''}`;
+    el.href = a.url;
+    el.title = `${a.headline} — open source article`;
+    document.getElementById('ab-count').textContent = `${abIdx + 1} / ${abItems.length}`;
+    el.classList.remove('fading');
+  };
+  if (animate) { el.classList.add('fading'); setTimeout(paint, 350); } else paint();
+}
+
+function abStart() {
+  clearInterval(abTimer);
+  abTimer = setInterval(() => { if (!abPaused) abShow(abIdx + 1); }, 6000);
+}
+
+async function loadRatingActions() {
+  try {
+    const data = await libraryFetch('/api/rating-actions');
+    abItems = (data.items || []).filter(a => a.headline && a.url);
+    if (!abItems.length) return;
+    document.getElementById('actions-banner').hidden = false;
+    abShow(0, false);
+    if (abItems.length > 1) abStart();
+  } catch (err) {
+    // Banner is optional — stay hidden if the backend can't build it
+  }
+}
+
+document.getElementById('ab-prev').addEventListener('click', () => { abShow(abIdx - 1); abStart(); });
+document.getElementById('ab-next').addEventListener('click', () => { abShow(abIdx + 1); abStart(); });
+document.getElementById('actions-banner').addEventListener('mouseenter', () => { abPaused = true; });
+document.getElementById('actions-banner').addEventListener('mouseleave', () => { abPaused = false; });
+loadRatingActions();
 
 // Enter key on CUSIP runs analysis
 document.getElementById('cusip-input').addEventListener('keydown', e => {

@@ -5,7 +5,7 @@ import asyncio
 import html
 import sqlite3
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -25,7 +25,7 @@ app.add_middleware(
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 BRAVE_API_KEY     = os.environ.get("BRAVE_API_KEY", "")
 DEFAULT_MODEL     = os.environ.get("DEFAULT_MODEL", "claude-sonnet-5-5")
-BACKEND_VERSION   = "2026-10-29g (CUSIP web lookup for exact system/obligor)"
+BACKEND_VERSION   = "2026-10-29h (rating actions banner)"
 NAME_MODEL        = os.environ.get("NAME_MODEL", "claude-haiku-5-5")   # fast model for issuer-name expansion
 DB_PATH           = os.environ.get("MUNIRADAR_DB", os.path.join(os.path.dirname(os.path.abspath(__file__)), "muniradar.db"))
 
@@ -894,6 +894,98 @@ async def lookup(req: LookupRequest):
         link_cusip(conn, iid, cusip)
         meta = library_meta(conn, iid)
     return {"found": True, **meta}
+
+
+# ── Recent muni rating actions (banner) ───────────────────────────────────────
+# Built from news search: highlights, not a complete feed. Cached for 4 hours.
+
+_ACTIONS_CACHE = {"at": 0.0, "items": []}
+_ACTIONS_LOCK  = asyncio.Lock()
+ACTIONS_TTL    = 4 * 3600
+ACTIONS_DAYS   = 14
+
+ACTION_QUERIES = [
+    "Moody's upgrades municipal bonds",
+    "Moody's downgrades municipal bonds",
+    "S&P Global Ratings upgrades municipal bonds",
+    "S&P Global Ratings downgrades municipal bonds",
+    "Fitch upgrades municipal revenue bonds",
+    "Fitch downgrades municipal bonds",
+    "rating outlook revised positive negative municipal bonds",
+    "KBRA assigns rating municipal bonds",
+]
+
+
+async def build_rating_actions() -> list:
+    today = datetime.now()
+    start = (today - timedelta(days=ACTIONS_DAYS)).strftime("%Y-%m-%d")
+    window = f"{start}to{today.strftime('%Y-%m-%d')}"
+    async with httpx.AsyncClient(timeout=httpx.Timeout(8.0, connect=4.0)) as client:
+        batches = await asyncio.gather(*[brave_search(client, q, count=10, freshness=window) for q in ACTION_QUERIES],
+                                       return_exceptions=True)
+    seen, lines = set(), []
+    for batch in batches:
+        if isinstance(batch, Exception):
+            continue
+        for r in batch:
+            if r["url"] in seen:
+                continue
+            seen.add(r["url"])
+            text = " ".join([r["snippet"]] + list(r.get("extra") or []))[:350]
+            lines.append(f"- [{(r.get('date') or '')[:10]}] {r['title']} | {text} | URL: {r['url']}")
+    if not lines or not ANTHROPIC_API_KEY:
+        return []
+
+    prompt = (f"Today is {today.strftime('%B %d, %Y')}. From these search results, list US MUNICIPAL credit rating actions "
+              f"from the last {ACTIONS_DAYS} days (state/local governments, school districts, public authorities, utilities, "
+              "airports, toll roads, and nonprofit hospitals/universities/housing that issue municipal bonds). Exclude corporates, "
+              "sovereigns, banks and structured finance. Only include an action actually described in a result; never invent. "
+              "One entry per action (merge duplicates). Return ONLY JSON: {\"actions\": [{\"headline\": \"<= 90 chars, e.g. "
+              "Moody's upgrades Chicago O'Hare airport revenue bonds to A1\", \"agency\": \"Moody's|S&P|Fitch|KBRA\", "
+              "\"direction\": \"up|down|neutral\", \"date\": \"YYYY-MM-DD\", \"url\": \"source URL from the result\"}]}. "
+              "direction: up = upgrade or outlook/watch to positive; down = downgrade or outlook/watch to negative; neutral = "
+              "affirmation or new rating. Newest first, at most 25.\n\n" + "\n".join(lines[:80]))
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.post(
+                "https://api.anthropic.com/v1/messages",
+                headers={"x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json"},
+                json={"model": NAME_MODEL, "max_tokens": 6000, "messages": [{"role": "user", "content": prompt}]},
+            )
+        if resp.status_code != 200:
+            return []
+        text = "".join(b.get("text", "") for b in resp.json().get("content", []) if b.get("type") == "text")
+        m = re.search(r"\{[\s\S]*\}", text)
+        actions = (json.loads(m.group()) if m else {}).get("actions", [])
+    except Exception:
+        return []
+
+    cutoff = (today - timedelta(days=ACTIONS_DAYS + 1)).strftime("%Y-%m-%d")
+    good = []
+    for a in actions:
+        if not isinstance(a, dict) or not a.get("headline") or not str(a.get("url", "")).startswith("http"):
+            continue
+        if a.get("date") and str(a["date"]) < cutoff:
+            continue
+        a["direction"] = a.get("direction") if a.get("direction") in ("up", "down", "neutral") else "neutral"
+        good.append({k: str(a.get(k, "")) for k in ("headline", "agency", "direction", "date", "url")})
+    good.sort(key=lambda a: a["date"], reverse=True)
+    return good[:25]
+
+
+@app.get("/api/rating-actions")
+async def rating_actions(refresh: bool = False):
+    async with _ACTIONS_LOCK:
+        ttl = ACTIONS_TTL if _ACTIONS_CACHE["items"] else 30 * 60   # retry sooner if the last attempt came back empty
+        if refresh or time.time() - _ACTIONS_CACHE["at"] > ttl:
+            items = await build_rating_actions()
+            if items or not _ACTIONS_CACHE["items"]:
+                _ACTIONS_CACHE.update(at=time.time(), items=items)
+            else:
+                _ACTIONS_CACHE["at"] = time.time()   # keep the last good list rather than blanking the banner
+    return {"as_of": datetime.fromtimestamp(_ACTIONS_CACHE["at"], timezone.utc).isoformat(timespec="seconds")
+                     if _ACTIONS_CACHE["at"] else None,
+            "days": ACTIONS_DAYS, "items": _ACTIONS_CACHE["items"]}
 
 
 @app.get("/api/issuers")
