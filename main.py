@@ -25,7 +25,8 @@ app.add_middleware(
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 BRAVE_API_KEY     = os.environ.get("BRAVE_API_KEY", "")
 DEFAULT_MODEL     = os.environ.get("DEFAULT_MODEL", "claude-sonnet-5-5")
-BACKEND_VERSION   = "2026-10-29e (per-agency ratings search)"
+BACKEND_VERSION   = "2026-10-29f (expanded issuer names for search)"
+NAME_MODEL        = os.environ.get("NAME_MODEL", "claude-haiku-5-5")   # fast model for issuer-name expansion
 DB_PATH           = os.environ.get("MUNIRADAR_DB", os.path.join(os.path.dirname(os.path.abspath(__file__)), "muniradar.db"))
 
 SYSTEM_PROMPT = """You are a senior municipal credit analyst at The Tribeca Group, a professional fixed income portfolio management team at Morgan Stanley. Your job is to produce rigorous, opinionated credit intelligence cards for muni bond CUSIPs. You have deep expertise in municipal credit structures, revenue pledge analysis, intercept mechanisms, sector benchmarks, and investability frameworks.
@@ -456,7 +457,13 @@ async def gather_web_data(cusip: str, issuer_name: str, include_ratings_search: 
     """Run web enrichment in parallel, hard cap 25s (allows for rate-limit retries)."""
     async def _fetch_all():
         async with httpx.AsyncClient(timeout=httpx.Timeout(8.0, connect=4.0)) as client:
-            search_name   = plain_issuer_name(issuer_name) if issuer_name else cusip
+            # Bloomberg-style ALL-CAPS abbreviations get expanded; already-expanded names are used as-is
+            if not issuer_name:
+                search_name = cusip
+            elif issuer_name.isupper():
+                search_name = plain_issuer_name(issuer_name)
+            else:
+                search_name = issuer_name
             year          = datetime.now().year
             ratings_query = f"{search_name} Moody's S&P Fitch rating outlook upgrade downgrade affirmed"
             news_query    = f"{search_name} bonds news {year}"
@@ -515,6 +522,41 @@ async def gather_web_data(cusip: str, issuer_name: str, include_ratings_search: 
 _IDENTITY_CACHE: dict = {}   # cusip -> (timestamp, identity); reused by lookup -> report
 
 
+async def expand_issuer_name(short_name: str, ticker: str, cusip: str) -> dict:
+    """Bloomberg short names are abbreviated and ambiguous ('DALLAS & FORT WORTH-B').
+    A quick call to a fast model turns short name + ticker into the full issuer/obligor
+    name that news and rating agencies actually use. Returns {} on any failure."""
+    if not ANTHROPIC_API_KEY or not short_name:
+        return {}
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(
+                "https://api.anthropic.com/v1/messages",
+                headers={"x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01",
+                         "content-type": "application/json"},
+                json={
+                    "model": NAME_MODEL,
+                    "max_tokens": 1000,
+                    "system": ("You identify US municipal bond issuers from Bloomberg identifiers. Return ONLY JSON: "
+                               '{"official_name": "...", "search_name": "..."}. official_name = full legal name of the '
+                               "obligor (the entity whose revenues or taxes pay the bonds). search_name = the name news "
+                               "articles and rating agencies use for that obligor. Use the ticker to disambiguate (e.g. "
+                               "'DALAPT' = Dallas/Fort Worth airport, not the City of Dallas). If unsure, expand the short "
+                               "name literally and do not invent."),
+                    "messages": [{"role": "user", "content":
+                                  f"Bloomberg short name: {short_name}\nBloomberg ticker: {ticker}\nCUSIP: {cusip}"}],
+                },
+            )
+        if resp.status_code != 200:
+            return {}
+        text = "".join(b.get("text", "") for b in resp.json().get("content", []) if b.get("type") == "text")
+        m = re.search(r"\{[\s\S]*\}", text)
+        names = json.loads(m.group()) if m else {}
+        return {k: str(names[k]).strip() for k in ("official_name", "search_name") if names.get(k)}
+    except Exception:
+        return {}
+
+
 async def resolve_identity(cusip: str) -> dict:
     """Identify the issuer behind a CUSIP from verified sources, in order of preference.
     Returns {data_source, issuer_name, section, blp_data}."""
@@ -535,6 +577,9 @@ async def resolve_identity(cusip: str) -> dict:
             issuer_name = blp_data.get("ISSUER", "")
     except (asyncio.TimeoutError, RuntimeError):
         blp_data = {}
+    names = {}
+    if blp_data and issuer_name:
+        names = await expand_issuer_name(issuer_name, blp_data.get("SECURITY_DES", ""), cusip)
 
     # ── Step 2: Fall back to OpenFIGI (Bloomberg's free identifier service), then EMMA ──
     if not blp_data or not issuer_name:
@@ -542,6 +587,7 @@ async def resolve_identity(cusip: str) -> dict:
         if figi:
             data_source = "openfigi"
             issuer_name = openfigi_search_name(figi["name"])
+            names = await expand_issuer_name(figi["name"], figi.get("ticker", ""), cusip)
             bloomberg_section = format_openfigi_data(figi, cusip)
         else:
             data_source = "emma"
@@ -553,7 +599,11 @@ async def resolve_identity(cusip: str) -> dict:
                 bloomberg_section = f"## Bond Identification\n  CUSIP: {cusip}\n  WARNING: Neither Bloomberg, OpenFIGI nor EMMA returned issuer data. Do NOT guess the issuer name. Set issuer name to 'Unknown — CUSIP {cusip}' and mark all ratings NR."
                 data_source = "none"
 
+    if names.get("official_name"):
+        bloomberg_section += (f"\n  Expanded issuer name (from Bloomberg short name + ticker): {names['official_name']}"
+                              f"\n  Commonly referred to as: {names.get('search_name', names['official_name'])}")
     identity = {"data_source": data_source, "issuer_name": issuer_name,
+                "search_name": names.get("search_name") or names.get("official_name") or "",
                 "section": bloomberg_section, "blp_data": blp_data}
     if data_source != "none":
         _IDENTITY_CACHE[cusip] = (time.time(), identity)
@@ -697,7 +747,8 @@ async def credit_intel(req: CreditIntelRequest):
 
     # ── Step 3: Web enrichment — use more ratings search if no Bloomberg ──
     include_ratings_search = (data_source != "bloomberg")
-    web_data = await gather_web_data(cusip, issuer_name, include_ratings_search=include_ratings_search)
+    web_data = await gather_web_data(cusip, identity.get("search_name") or issuer_name,
+                                     include_ratings_search=include_ratings_search)
 
     pdf_section = ""
     if req.pdf_text:
